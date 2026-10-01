@@ -112,11 +112,45 @@ function HomeCare() {
           <h2 className="mb-3 font-bold text-primary">🩺 الأعراض اليومية</h2>
           <p className="mb-2 text-sm text-muted-foreground">هل تعاني اليوم من أي مما يلي؟</p>
           <div className="flex flex-wrap gap-2">
-            {symptomsList.map((s) => {
+            {[...symptomsList, ...customSyms.map((c) => c.name)].map((s) => {
               const on = sym.includes(s);
-              return <button key={s} onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
-                className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>{s}</button>;
+              const extra = customSyms.find((c) => c.name === s);
+              return (
+                <span key={s} className="inline-flex items-center">
+                  <button onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
+                    className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>
+                    {s}
+                    {extra && (extra.loc || extra.sev) && (
+                      <span className="mr-1 text-xs opacity-80">
+                        [{[extra.loc, extra.sev && `${extra.sev}/10`].filter(Boolean).join(" · ")}]
+                      </span>
+                    )}
+                  </button>
+                  {extra && (
+                    <button onClick={() => { setCustomSyms(customSyms.filter((c) => c.name !== s)); setSym(sym.filter((x) => x !== s)); }}
+                      aria-label={`حذف ${s}`} className="mr-1 text-xs text-muted-foreground hover:text-destructive">✕</button>
+                  )}
+                </span>
+              );
             })}
+          </div>
+          <div className="mt-4 rounded-lg border bg-background p-3">
+            <p className="mb-2 text-sm font-semibold">إضافة عرض آخر غير المذكور</p>
+            <input value={symDraft} onChange={(e) => setSymDraft(e.target.value)}
+              placeholder="اكتب العرض، مثل: ألم عند التنفس"
+              className="w-full rounded-lg border bg-background p-2 text-sm" />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <select value={symLoc} onChange={(e) => setSymLoc(e.target.value)} className="rounded-lg border bg-background p-1.5 text-xs">
+                <option value="">مكان الألم (اختياري)</option>
+                {sites.map((s) => <option key={s}>{s}</option>)}
+                <option value="أخرى">أخرى</option>
+              </select>
+              <select value={symSev} onChange={(e) => setSymSev(e.target.value)} className="rounded-lg border bg-background p-1.5 text-xs">
+                <option value="">شدة الألم من 10 (اختياري)</option>
+                {Array.from({ length: 11 }, (_, n) => <option key={n} value={String(n)}>{n} / 10</option>)}
+              </select>
+            </div>
+            <button onClick={addSym} className="btn mt-2 w-full bg-primary px-3 py-1.5 text-sm text-primary-foreground">+ إضافة العرض</button>
           </div>
           {sym.length > 0 && <p className="mt-3 text-xs text-destructive">سيتم إشعار الممرض المتابع بهذه الأعراض.</p>}
         </section>

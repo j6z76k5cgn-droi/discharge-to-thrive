@@ -26,8 +26,12 @@ const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", 
 function HomeCare() {
   const [medState, setMedState] = useState<Record<number, string>>({});
   const [pain, setPain] = useState<number | null>(null);
-  const [site, setSite] = useState("");
+  const [sitesSel, setSitesSel] = useState<string[]>([]);
   const [sym, setSym] = useState<string[]>([]);
+  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string; sev?: string }[]>([]);
+  const [symDraft, setSymDraft] = useState("");
+  const [symLoc, setSymLoc] = useState("");
+  const [symSev, setSymSev] = useState("");
   const [notes, setNotes] = useState<{ t: string; time: string }[]>([]);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -45,6 +49,14 @@ function HomeCare() {
     if (!draft.trim()) return;
     setNotes([...notes, { t: draft.trim(), time: new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) }]);
     setDraft("");
+  };
+  const addSym = () => {
+    const name = symDraft.trim();
+    if (!name) return;
+    if (symptomsList.includes(name) || customSyms.some((s) => s.name === name)) { setSymDraft(""); return; }
+    setCustomSyms([...customSyms, { name, loc: symLoc || undefined, sev: symSev || undefined }]);
+    setSym((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSymDraft(""); setSymLoc(""); setSymSev("");
   };
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
 
@@ -83,12 +95,17 @@ function HomeCare() {
             ))}
           </div>
           <div className="mt-1 flex justify-between text-xs text-muted-foreground"><span>لا ألم</span><span>ألم شديد</span></div>
-          <p className="mt-4 mb-2 text-sm font-semibold">مكان الألم</p>
+          <p className="mt-4 mb-2 text-sm font-semibold">مكان الألم <span className="text-xs font-normal text-muted-foreground">(يمكن اختيار أكثر من مكان)</span></p>
           <div className="flex flex-wrap gap-2">
-            {sites.map((s) => (
-              <button key={s} onClick={() => setSite(s)} className={`btn px-3 py-1 text-sm ${site === s ? "bg-ink text-primary-foreground" : "bg-muted"}`}>{s}</button>
-            ))}
+            {sites.map((s) => {
+              const on = sitesSel.includes(s);
+              return (
+                <button key={s} onClick={() => setSitesSel(on ? sitesSel.filter((x) => x !== s) : [...sitesSel, s])}
+                  className={`btn px-3 py-1 text-sm ${on ? "bg-ink text-primary-foreground" : "bg-muted"}`}>{s}</button>
+              );
+            })}
           </div>
+          {sitesSel.length > 0 && <p className="mt-2 text-xs text-muted-foreground">مكان الألم: {sitesSel.join("، ")}</p>}
         </section>
 
         <section className="card-surface p-5">

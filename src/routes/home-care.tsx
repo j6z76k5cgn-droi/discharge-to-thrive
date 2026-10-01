@@ -28,7 +28,7 @@ function HomeCare() {
   const [pain, setPain] = useState<number | null>(null);
   const [sitesSel, setSitesSel] = useState<string[]>([]);
   const [sym, setSym] = useState<string[]>([]);
-  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string; sev?: string }[]>([]);
+  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string | undefined; sev?: string | undefined }[]>([]);
   const [symDraft, setSymDraft] = useState("");
   const [symLoc, setSymLoc] = useState("");
   const [symSev, setSymSev] = useState("");

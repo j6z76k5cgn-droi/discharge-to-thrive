@@ -1,24 +1,41 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Shell } from "@/components/Shell";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "مِداد | خروج ذكي → تعافي آمن" },
+      { name: "description", content: "نظام صحي ذكي لمتابعة وتقييم المريض من المستشفى إلى المنزل." },
+      { property: "og:title", content: "مِداد | Smart Discharge → Home" },
+      { property: "og:description", content: "متابعة ذكية للمريض من المستشفى إلى المنزل مع تنبيهات الذكاء الاصطناعي." },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+const cards = [
+  { to: "/discharge", n: "١", t: "قائمة ما قبل الخروج", d: "التثقيف الصحي، تقييم القدرة، ودرجة جاهزية الخروج الذكية." },
+  { to: "/home-care", n: "٢", t: "تطبيق المريض المنزلي", d: "تتبع الأدوية، مقياس الألم، الأعراض، والمساعد الصوتي." },
+  { to: "/nurse", n: "٣", t: "لوحة تحكم الممرض", d: "قائمة المرضى، السجل اليومي، وتحليلات وتنبيهات ذكية." },
+] as const;
+
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <Shell>
+      <section className="bg-ink-gradient rounded-2xl p-8 text-primary-foreground md:p-12">
+        <p className="text-sm opacity-80">Smart Discharge → Home</p>
+        <h1 className="font-display mt-2 text-4xl md:text-5xl">خروج ذكي ← تعافٍ آمن</h1>
+        <p className="mt-4 max-w-xl opacity-90">نظام صحي ذكي لمتابعة وتقييم المريض من لحظة خروجه من المستشفى حتى تعافيه في المنزل.</p>
+      </section>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {cards.map((c) => (
+          <Link key={c.to} to={c.to} className="card-surface p-6 transition hover:-translate-y-1">
+            <span className="font-display text-3xl text-primary">{c.n}</span>
+            <h2 className="mt-2 text-lg font-bold">{c.t}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{c.d}</p>
+          </Link>
+        ))}
+      </div>
+    </Shell>
   );
 }

@@ -77,13 +77,13 @@ export interface Alert { level: Status; text: string }
 /** Trend analysis engine: compares latest day with previous days. */
 export function analyze(p: Patient) {
   const logs = p.logs;
-  const last = logs[logs.length - 1];
+  const last = logs[logs.length - 1]!;
   const prev = logs[logs.length - 2];
   const alerts: Alert[] = [];
   const insights: string[] = [];
 
   let rising = 0;
-  for (let i = logs.length - 1; i > 0 && logs[i].pain > logs[i - 1].pain; i--) rising++;
+  for (let i = logs.length - 1; i > 0 && logs[i]!.pain > logs[i - 1]!.pain; i--) rising++;
   if (rising >= 2) alerts.push({ level: "urgent", text: `ارتفاع الألم لـ ${rising} أيام متتالية (آخر قراءة ${last.pain}/10)` });
 
   const missedDays = logs.slice(-2).filter((l) => l.medsTaken < l.medsTotal).length;

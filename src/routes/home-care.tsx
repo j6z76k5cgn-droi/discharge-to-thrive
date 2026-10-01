@@ -26,8 +26,12 @@ const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", 
 function HomeCare() {
   const [medState, setMedState] = useState<Record<number, string>>({});
   const [pain, setPain] = useState<number | null>(null);
-  const [site, setSite] = useState("");
+  const [sitesSel, setSitesSel] = useState<string[]>([]);
   const [sym, setSym] = useState<string[]>([]);
+  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string | undefined; sev?: string | undefined }[]>([]);
+  const [symDraft, setSymDraft] = useState("");
+  const [symLoc, setSymLoc] = useState("");
+  const [symSev, setSymSev] = useState("");
   const [notes, setNotes] = useState<{ t: string; time: string }[]>([]);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -45,6 +49,14 @@ function HomeCare() {
     if (!draft.trim()) return;
     setNotes([...notes, { t: draft.trim(), time: new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) }]);
     setDraft("");
+  };
+  const addSym = () => {
+    const name = symDraft.trim();
+    if (!name) return;
+    if (symptomsList.includes(name) || customSyms.some((s) => s.name === name)) { setSymDraft(""); return; }
+    setCustomSyms([...customSyms, { name, loc: symLoc || undefined, sev: symSev || undefined }]);
+    setSym((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSymDraft(""); setSymLoc(""); setSymSev("");
   };
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
 
@@ -83,23 +95,62 @@ function HomeCare() {
             ))}
           </div>
           <div className="mt-1 flex justify-between text-xs text-muted-foreground"><span>لا ألم</span><span>ألم شديد</span></div>
-          <p className="mt-4 mb-2 text-sm font-semibold">مكان الألم</p>
+          <p className="mt-4 mb-2 text-sm font-semibold">مكان الألم <span className="text-xs font-normal text-muted-foreground">(يمكن اختيار أكثر من مكان)</span></p>
           <div className="flex flex-wrap gap-2">
-            {sites.map((s) => (
-              <button key={s} onClick={() => setSite(s)} className={`btn px-3 py-1 text-sm ${site === s ? "bg-ink text-primary-foreground" : "bg-muted"}`}>{s}</button>
-            ))}
+            {sites.map((s) => {
+              const on = sitesSel.includes(s);
+              return (
+                <button key={s} onClick={() => setSitesSel(on ? sitesSel.filter((x) => x !== s) : [...sitesSel, s])}
+                  className={`btn px-3 py-1 text-sm ${on ? "bg-ink text-primary-foreground" : "bg-muted"}`}>{s}</button>
+              );
+            })}
           </div>
+          {sitesSel.length > 0 && <p className="mt-2 text-xs text-muted-foreground">مكان الألم: {sitesSel.join("، ")}</p>}
         </section>
 
         <section className="card-surface p-5">
           <h2 className="mb-3 font-bold text-primary">🩺 الأعراض اليومية</h2>
           <p className="mb-2 text-sm text-muted-foreground">هل تعاني اليوم من أي مما يلي؟</p>
           <div className="flex flex-wrap gap-2">
-            {symptomsList.map((s) => {
+            {[...symptomsList, ...customSyms.map((c) => c.name)].map((s) => {
               const on = sym.includes(s);
-              return <button key={s} onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
-                className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>{s}</button>;
+              const extra = customSyms.find((c) => c.name === s);
+              return (
+                <span key={s} className="inline-flex items-center">
+                  <button onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
+                    className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>
+                    {s}
+                    {extra && (extra.loc || extra.sev) && (
+                      <span className="mr-1 text-xs opacity-80">
+                        [{[extra.loc, extra.sev && `${extra.sev}/10`].filter(Boolean).join(" · ")}]
+                      </span>
+                    )}
+                  </button>
+                  {extra && (
+                    <button onClick={() => { setCustomSyms(customSyms.filter((c) => c.name !== s)); setSym(sym.filter((x) => x !== s)); }}
+                      aria-label={`حذف ${s}`} className="mr-1 text-xs text-muted-foreground hover:text-destructive">✕</button>
+                  )}
+                </span>
+              );
             })}
+          </div>
+          <div className="mt-4 rounded-lg border bg-background p-3">
+            <p className="mb-2 text-sm font-semibold">إضافة عرض آخر غير المذكور</p>
+            <input value={symDraft} onChange={(e) => setSymDraft(e.target.value)}
+              placeholder="اكتب العرض، مثل: ألم عند التنفس"
+              className="w-full rounded-lg border bg-background p-2 text-sm" />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <select value={symLoc} onChange={(e) => setSymLoc(e.target.value)} className="rounded-lg border bg-background p-1.5 text-xs">
+                <option value="">مكان الألم (اختياري)</option>
+                {sites.map((s) => <option key={s}>{s}</option>)}
+                <option value="أخرى">أخرى</option>
+              </select>
+              <select value={symSev} onChange={(e) => setSymSev(e.target.value)} className="rounded-lg border bg-background p-1.5 text-xs">
+                <option value="">شدة الألم من 10 (اختياري)</option>
+                {Array.from({ length: 11 }, (_, n) => <option key={n} value={String(n)}>{n} / 10</option>)}
+              </select>
+            </div>
+            <button onClick={addSym} className="btn mt-2 w-full bg-primary px-3 py-1.5 text-sm text-primary-foreground">+ إضافة العرض</button>
           </div>
           {sym.length > 0 && <p className="mt-3 text-xs text-destructive">سيتم إشعار الممرض المتابع بهذه الأعراض.</p>}
         </section>

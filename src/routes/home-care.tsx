@@ -25,7 +25,7 @@ const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", 
 
 function HomeCare() {
   const [medState, setMedState] = useState<Record<number, string>>({});
-  const [pain, setPain] = useState<number | null>(null);
+  const [painBySite, setPainBySite] = useState<Record<string, number>>({});
   const [sitesSel, setSitesSel] = useState<string[]>([]);
   const [sym, setSym] = useState<string[]>([]);
   const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string | undefined; sev?: string | undefined }[]>([]);
@@ -88,14 +88,7 @@ function HomeCare() {
 
         <section className="card-surface p-5">
           <h2 className="mb-3 font-bold text-primary">📊 مستوى الألم</h2>
-          <div className="grid grid-cols-11 gap-1">
-            {Array.from({ length: 11 }, (_, n) => (
-              <button key={n} onClick={() => setPain(n)}
-                className={`aspect-square rounded-lg text-sm font-bold ${pain === n ? painColor(n) + " scale-110" : "bg-muted"}`}>{n}</button>
-            ))}
-          </div>
-          <div className="mt-1 flex justify-between text-xs text-muted-foreground"><span>لا ألم</span><span>ألم شديد</span></div>
-          <p className="mt-4 mb-2 text-sm font-semibold">مكان الألم <span className="text-xs font-normal text-muted-foreground">(يمكن اختيار أكثر من مكان)</span></p>
+          <p className="mb-2 text-sm font-semibold">مكان الألم <span className="text-xs font-normal text-muted-foreground">(يمكن اختيار أكثر من مكان)</span></p>
           <div className="flex flex-wrap gap-2">
             {sites.map((s) => {
               const on = sitesSel.includes(s);
@@ -105,7 +98,21 @@ function HomeCare() {
               );
             })}
           </div>
-          {sitesSel.length > 0 && <p className="mt-2 text-xs text-muted-foreground">مكان الألم: {sitesSel.join("، ")}</p>}
+          <div className="mt-4 space-y-3">
+            {sitesSel.map((s) => (
+              <div key={s} className="rounded-xl border bg-background p-3">
+                <p className="mb-2 text-sm font-semibold">{s}</p>
+                <div className="grid grid-cols-11 gap-1">
+                  {Array.from({ length: 11 }, (_, n) => (
+                    <button key={n} onClick={() => setPainBySite({ ...painBySite, [s]: n })}
+                      className={`aspect-square rounded-lg text-sm font-bold ${(painBySite[s] ?? -1) === n ? painColor(n) + " scale-110" : "bg-muted"}`}>{n}</button>
+                  ))}
+                </div>
+                <div className="mt-1 flex justify-between text-xs text-muted-foreground"><span>لا ألم</span><span>ألم شديد</span></div>
+              </div>
+            ))}
+          </div>
+          {sitesSel.length === 0 && <p className="mt-3 text-xs text-muted-foreground">اختر مكان الألم أولاً، ثم قيّم كل مكان على حدة.</p>}
         </section>
 
         <section className="card-surface p-5">

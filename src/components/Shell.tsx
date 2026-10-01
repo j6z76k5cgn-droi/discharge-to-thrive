@@ -2,8 +2,6 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 const nav = [
-  { to: "/discharge", label: "قبل الخروج" },
-  { to: "/home-care", label: "المتابعة المنزلية" },
   { to: "/nurse", label: "لوحة الممرض" },
 ] as const;
 

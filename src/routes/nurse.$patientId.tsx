@@ -2,7 +2,6 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
-import { riskLevelMeta } from "@/lib/risk-engine";
 
 export const Route = createFileRoute("/nurse/$patientId")({
   loader: ({ params }) => {
@@ -72,10 +71,6 @@ function PatientPage() {
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <section className="card-surface p-5">
           <h2 className="mb-2 font-bold text-primary">🤖 تحليلات الذكاء الاصطناعي</h2>
-          <div className="mb-3 flex items-center gap-3">
-            <span className="font-display text-4xl text-ink">{a.risk.score}</span>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${riskLevelMeta[a.risk.level].cls}`}>{a.risk.critical ? "تجاوز حرج" : riskLevelMeta[a.risk.level].label}</span>
-          </div>
           <ul className="space-y-1 text-sm">{a.insights.map((i) => <li key={i}>• {i}</li>)}</ul>
           {a.alerts.length > 0 && (
             <ul className="mt-3 space-y-1">{a.alerts.map((x) => (

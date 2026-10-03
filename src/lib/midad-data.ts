@@ -1,4 +1,3 @@
-import { evaluatePatientStatus } from "./risk-engine";
 export type Status = "stable" | "follow" | "urgent";
 
 export interface DayLog {
@@ -102,20 +101,12 @@ export function analyze(p: Patient) {
   const adherence = Math.round((logs.reduce((a, l) => a + l.medsTaken, 0) / logs.reduce((a, l) => a + l.medsTotal, 0)) * 100);
   insights.push(`نسبة الالتزام الدوائي الإجمالية ${adherence}%.`);
 
-  const risk = evaluatePatientStatus({
-    symptoms: last.symptoms.map((n) => ({ name: n })),
-    temp: last.temp,
-    adherencePct: Math.round((last.medsTaken / last.medsTotal) * 100),
-    pain: last.pain,
-  });
-  if (risk.critical) alerts.unshift({ level: "urgent", text: `تجاوز حرج: ${risk.reasons.join("، ")}` });
-  insights.push(`درجة الخطورة الموزونة ${risk.score}/100 (أعراض ${risk.factors.S} · مؤشرات ${risk.factors.I} · أدوية ${risk.factors.M} · ألم ${risk.factors.P}).`);
   const status: Status = alerts.some((a) => a.level === "urgent") ? "urgent" : alerts.length ? "follow" : "stable";
   const recommendation =
     status === "urgent" ? "يوصى بالاتصال المباشر بالمريض فوراً وطلب مراجعة المستشفى/الطوارئ."
     : status === "follow" ? "يوصى بمكالمة متابعة خلال 24 ساعة وتعزيز التثقيف الدوائي."
     : "منحنى التعافي إيجابي — الاستمرار على الخطة الحالية.";
-  return { alerts, insights, status, adherence, recommendation, risk };
+  return { alerts, insights, status, adherence, recommendation };
 }
 
 export const statusMeta: Record<Status, { label: string; cls: string }> = {

@@ -20,22 +20,6 @@ function Nurse() {
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">مرضاي بعد الخروج</h1>
-      <section className="card-surface mt-6 p-5">
-        <h2 className="mb-3 font-bold text-destructive">🚨 تنبيهات الالتزام الدوائي</h2>
-        <div className="grid gap-2 md:grid-cols-2">
-          {rows.flatMap(({ p }) => {
-            const l = p.logs[p.logs.length - 1]!;
-            if (l.medsTaken >= l.medsTotal) return [];
-            return [(
-              <Link key={p.id} to="/nurse/$patientId" params={{ patientId: p.id }}
-                className={`rounded-xl p-3 text-sm ${l.medsTotal - l.medsTaken > 1 ? "bg-destructive text-destructive-foreground" : "bg-warning text-warning-foreground"}`}>
-                <b>{p.name}</b> — فاتته {l.medsTotal - l.medsTaken} جرعة (اليوم {l.day})
-                <span className="block text-xs opacity-90">آخر تسجيل: {l.medTimes[l.medTimes.length - 1]} · السبب: {l.missedReason ?? "غير مسجل"}</span>
-              </Link>
-            )];
-          })}
-        </div>
-      </section>
       <div className="mt-6 space-y-3">
         {rows.map(({ p, a }) => (
           <Link key={p.id} to="/nurse/$patientId" params={{ patientId: p.id }}
@@ -46,7 +30,6 @@ function Nurse() {
               {a.alerts[0] && <p className="mt-1 text-xs text-destructive">⚠ {a.alerts[0].text}</p>}
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">خطورة {a.risk.score}/100</span>
               <span className="text-sm text-muted-foreground">التزام {a.adherence}%</span>
               <span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusMeta[a.status].cls}`}>{statusMeta[a.status].label}</span>
             </div>

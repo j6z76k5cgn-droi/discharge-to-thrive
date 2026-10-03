@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { evaluatePatientStatus, riskLevelMeta } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
 
 export const Route = createFileRoute("/home-care")({
@@ -15,16 +16,36 @@ export const Route = createFileRoute("/home-care")({
 });
 
 const meds = [
-  { n: "باراسيتامول 500mg", t: "08:00" },
-  { n: "أموكسيسيلين 500mg", t: "14:00" },
-  { n: "أوميبرازول 20mg", t: "20:00" },
-  { n: "باراسيتامول 500mg", t: "23:00" },
+  { rx: "RX-2026-9941", n: "Paracetamol", d: "500 mg", times: ["08:00", "16:00", "23:00"], food: "بعد الأكل 🍽️", start: "3 أكتوبر", end: "10 أكتوبر 2026",
+    ins: "خذ قرصًا واحدًا عن طريق الفم مع الماء.", warn: "لا تتجاوز الجرعة المحددة في وصفة الطبيب." },
+  { rx: "RX-2026-9942", n: "Amoxicillin", d: "500 mg", times: ["08:00", "14:00", "20:00"], food: "مع الطعام 🥣", start: "3 أكتوبر", end: "9 أكتوبر 2026",
+    ins: "خذ كبسولة واحدة كاملة مع كوب ماء.", warn: "أكمل المدة كاملة حتى لو تحسنت." },
+  { rx: "RX-2026-9943", n: "Omeprazole", d: "20 mg", times: ["07:30"], food: "على معدة فارغة ⏳", start: "3 أكتوبر", end: "17 أكتوبر 2026",
+    ins: "خذ كبسولة واحدة قبل الإفطار بنصف ساعة.", warn: "لا تفتح الكبسولة أو تمضغها." },
 ];
-const symptomsList = ["حرارة", "غثيان", "ضيق التنفس", "تورم الجرح", "دوخة"];
+const GRACE = 60, ADVANCE = 30;
+const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h! * 60 + m!; };
+const speak = (txt: string) => {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(txt); u.lang = "ar-SA"; window.speechSynthesis.speak(u);
+};
+const symIcons: Record<string, string> = { "حرارة": "🌡️", "غثيان": "🤢", "ضيق التنفس": "😮‍💨", "تورم الجرح": "🩹", "دوخة": "😵‍💫", "زرقة الشفاه/الأطراف": "💙", "ألم صدر حاد": "💔" };
+type Mode = "STANDARD" | "BIG_BUTTONS" | "VISUAL_SYMBOLS" | "CAREGIVER";
+const modes: { v: Mode; l: string }[] = [
+  { v: "STANDARD", l: "📝 عادي" }, { v: "BIG_BUTTONS", l: "👆 أزرار كبيرة" }, { v: "VISUAL_SYMBOLS", l: "🖼️ رموز بصرية" }, { v: "CAREGIVER", l: "👨‍👩‍👧 وضع المرافق" },
+];
+type Dose = { status: "TAKEN"; at: string } | { status: "MISSED"; reason: string; severe?: string };
+
+const symptomsList = ["حرارة", "غثيان", "ضيق التنفس", "تورم الجرح", "دوخة", "زرقة الشفاه/الأطراف", "ألم صدر حاد"];
 const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", "الظهر", "الأطراف"];
 
 function HomeCare() {
-  const [medState, setMedState] = useState<Record<number, string>>({});
+  const [doses, setDoses] = useState<Record<string, Dose>>({});
+  const [now, setNow] = useState<number | null>(null);
+  const [mode, setMode] = useState<Mode>("STANDARD");
+  const [cgId, setCgId] = useState("CG-8821");
+  useEffect(() => { const f = () => { const d = new Date(); setNow(d.getHours() * 60 + d.getMinutes()); }; f(); const t = setInterval(f, 30000); return () => clearInterval(t); }, []);
   const [painBySite, setPainBySite] = useState<Record<string, number>>({});
   const [sitesSel, setSitesSel] = useState<string[]>([]);
   const [sym, setSym] = useState<string[]>([]);
@@ -47,7 +68,7 @@ function HomeCare() {
   };
   const addNote = () => {
     if (!draft.trim()) return;
-    setNotes([...notes, { t: draft.trim(), time: new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) }]);
+    setNotes([...notes, { t: draft.trim() + enteredBy, time: new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) }]);
     setDraft("");
   };
   const addSym = () => {
@@ -58,32 +79,117 @@ function HomeCare() {
     setSym((prev) => (prev.includes(name) ? prev : [...prev, name]));
     setSymDraft(""); setSymLoc(""); setSymSev("");
   };
+  const enteredBy = mode === "CAREGIVER" ? ` · بواسطة المرافق ${cgId}` : "";
+  const due = meds.flatMap((m) => m.times.map((t) => ({ k: `${m.rx}-${t}`, t }))).filter((x) => now != null && toMin(x.t) <= now);
+  const taken = due.filter((x) => doses[x.k]?.status === "TAKEN").length;
+  const missedAuto = due.filter((x) => !doses[x.k] && now! - toMin(x.t) > GRACE);
+  const adherencePct = due.length ? Math.round((taken / due.length) * 100) : 100;
+  const severe = Object.values(doses).find((d) => d.status === "MISSED" && d.severe) as { severe?: string } | undefined;
+  const risk = evaluatePatientStatus({
+    symptoms: sym.map((n) => { const c = customSyms.find((x) => x.name === n); return { name: n, severity: c?.sev ? Number(c.sev) : undefined }; }),
+    adherencePct,
+    pain: Math.max(0, ...Object.entries(painBySite).filter(([k]) => sitesSel.includes(k)).map(([, v]) => v)),
+    severeSideEffect: severe?.severe,
+  });
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
 
   return (
     <Shell>
+      <div className={mode === "BIG_BUTTONS" ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
       <h1 className="font-display text-3xl text-ink">مهامي اليومية</h1>
       <p className="text-sm text-muted-foreground">اليوم الرابع بعد الخروج</p>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <section className="card-surface p-5">
-          <h2 className="mb-3 font-bold text-primary">💊 تتبع الأدوية</h2>
-          {meds.map((m, i) => (
-            <div key={i} className="border-t py-3 first:border-0">
-              <div className="flex items-center justify-between">
-                <div><p className="font-semibold">{m.n}</p><p className="text-xs text-muted-foreground">{m.t}</p></div>
-                {medState[i] === "taken" ? <span className="text-sm font-semibold text-success">✓ تم التناول</span> : (
-                  <button onClick={() => setMedState({ ...medState, [i]: "taken" })} className="btn bg-primary px-3 py-1 text-sm text-primary-foreground">تم</button>
-                )}
-              </div>
-              {medState[i] !== "taken" && (
-                <select value={medState[i] ?? ""} onChange={(e) => setMedState({ ...medState, [i]: e.target.value })}
-                  className="mt-2 w-full rounded-lg border bg-background p-1.5 text-xs">
-                  <option value="">سبب عدم التناول (اختياري)</option>
-                  <option>نسيت</option><option>أعراض جانبية</option><option>نفد الدواء</option><option>كنت نائماً</option>
-                </select>
-              )}
-            </div>
+
+      <section className="card-surface mt-4 p-4">
+        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف</p>
+        <div className="flex flex-wrap gap-2">
+          {modes.map((m) => (
+            <button key={m.v} onClick={() => setMode(m.v)} className={`btn px-3 py-1.5 text-sm ${mode === m.v ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{m.l}</button>
           ))}
+          <button onClick={() => speak("مهامي اليومية. سجّل أدويتك، ومستوى الألم، والأعراض.")} className="btn bg-secondary px-3 py-1.5 text-sm text-secondary-foreground">🔊 اقرأ لي</button>
+        </div>
+        {mode === "CAREGIVER" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">
+            رمز المرافق:
+            <input value={cgId} onChange={(e) => setCgId(e.target.value)} className="w-28 rounded border bg-background p-1 text-foreground" />
+            <span className="text-xs">كل إدخال يُسجَّل باسم المرافق (entered_by: CAREGIVER) لمراجعة التمريض.</span>
+          </div>
+        )}
+      </section>
+
+      {risk.critical ? (
+        <div className="mt-4 rounded-2xl bg-destructive p-5 text-destructive-foreground">
+          <p className="font-bold">🚨 تم رصد علامة تستدعي تقييمًا عاجلًا</p>
+          <p className="mt-1 text-sm">سبب التنبيه: {risk.reasons.join("، ")}. الإجراء: تم إشعار الكادر التمريضي المسؤول وسيتم التواصل معك.</p>
+        </div>
+      ) : (
+        <div className="card-surface mt-4 flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
+          <span>البيانات مسجلة والمتابعة مستمرة.</span>
+          <span className={`rounded-full px-3 py-1 font-semibold ${riskLevelMeta[risk.level].cls}`}>مؤشر المتابعة: {riskLevelMeta[risk.level].label}</span>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <section className="card-surface p-5 md:col-span-2">
+          <h2 className="mb-1 font-bold text-primary">💊 دليل العلاج وتتبع الجرعات</h2>
+          <p className="mb-3 text-xs text-muted-foreground">التعليمات منقولة حرفيًا من وصفة الطبيب المعتمدة — لا يتم توليدها أو تعديلها آليًا.</p>
+          {missedAuto.length > 0 && (
+            <p className="mb-3 rounded-lg bg-warning p-2 text-sm text-warning-foreground">⏰ {missedAuto.length} جرعة تجاوزت فترة السماح (60 دقيقة) — تم إشعار الممرض المتابع.</p>
+          )}
+          <div className="grid gap-3 lg:grid-cols-3">
+            {meds.map((m) => {
+              const next = m.times.find((t) => now != null && toMin(t) > now && !doses[`${m.rx}-${t}`]);
+              const left = next && now != null ? toMin(next) - now : null;
+              const text = `${m.n} ${m.d}. ${m.ins} ${m.food}. ${m.warn}`;
+              return (
+                <div key={m.rx} className="rounded-xl border bg-background p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div><p className="font-bold" dir="ltr">{m.n} — {m.d}</p><p className="text-xs text-muted-foreground">من {m.start} إلى {m.end}</p></div>
+                    <button onClick={() => speak(text)} aria-label="استماع" className="btn bg-secondary px-2 py-1 text-secondary-foreground">🔊</button>
+                  </div>
+                  <p className="mt-2 text-sm">{m.times.length} جرعات يومياً | {m.food}</p>
+                  <p className="mt-1 text-sm">{m.ins}</p>
+                  <p className="mt-1 text-xs text-destructive">⚠ {m.warn}</p>
+                  {next && <p className={`mt-2 rounded-lg p-2 text-xs ${left! <= ADVANCE ? "bg-warning text-warning-foreground" : "bg-muted"}`}>الجرعة القادمة {next} · بعد {Math.floor(left! / 60)}س {left! % 60}د{left! <= ADVANCE ? " — 🔔 تنبيه مسبق" : ""}</p>}
+                  <div className="mt-3 space-y-2">
+                    {m.times.map((t) => {
+                      const k = `${m.rx}-${t}`, d = doses[k];
+                      const late = now != null && !d ? now - toMin(t) : -1;
+                      const st = d ? d.status : late > GRACE ? "MISSED" : late >= 0 ? "DELAYED" : "SCHEDULED";
+                      return (
+                        <div key={t} className="rounded-lg border p-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span dir="ltr" className="font-semibold">{t}</span>
+                            {d?.status === "TAKEN" ? <span className="text-xs font-semibold text-success">✓ أُخذت {d.at}</span>
+                              : d?.status === "MISSED" ? <span className="text-xs text-destructive">لم تؤخذ: {d.reason}{d.severe ? " (حادة)" : ""}</span>
+                              : <span className={`text-xs ${st === "MISSED" ? "text-destructive" : st === "DELAYED" ? "text-warning" : "text-muted-foreground"}`}>{st === "MISSED" ? "فائتة" : st === "DELAYED" ? "متأخرة" : "مجدولة"}</span>}
+                          </div>
+                          {!d && (
+                            <div className="mt-2 flex gap-2">
+                              <button onClick={() => setDoses({ ...doses, [k]: { status: "TAKEN", at: new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) + enteredBy } })}
+                                className="btn flex-1 bg-success px-2 py-1 text-xs text-success-foreground">أخذت الدواء 🟢</button>
+                              <select value="" onChange={(e) => e.target.value && setDoses({ ...doses, [k]: { status: "MISSED", reason: e.target.value } })}
+                                className="flex-1 rounded-lg border bg-background p-1 text-xs">
+                                <option value="">لم آخذه…</option>
+                                <option>نسيت</option><option>ما قدرت آخذ الدواء (صعوبة بلع/غثيان)</option>
+                                <option>ظهرت أعراض جانبية</option><option>ما توفر الدواء</option><option>سبب آخر</option>
+                              </select>
+                            </div>
+                          )}
+                          {d?.status === "MISSED" && d.reason === "ظهرت أعراض جانبية" && !d.severe && (
+                            <div className="mt-2 flex gap-2 text-xs">
+                              <span>شدة الأعراض؟</span>
+                              <button onClick={() => setDoses({ ...doses, [k]: { ...d, reason: "أعراض جانبية خفيفة" } })} className="btn bg-muted px-2 py-0.5">خفيفة</button>
+                              <button onClick={() => setDoses({ ...doses, [k]: { ...d, severe: `${m.n} ${t}` } })} className="btn bg-destructive px-2 py-0.5 text-destructive-foreground">حادة 🚨</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
 
         <section className="card-surface p-5">
@@ -126,6 +232,7 @@ function HomeCare() {
                 <span key={s} className="inline-flex items-center">
                   <button onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
                     className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>
+                    {mode === "VISUAL_SYMBOLS" && <span className="ml-1 text-2xl">{symIcons[s] ?? "❓"}</span>}
                     {s}
                     {extra && (extra.loc || extra.sev) && (
                       <span className="mr-1 text-xs opacity-80">
@@ -185,6 +292,7 @@ function HomeCare() {
             ))}
           </ul>
         </section>
+      </div>
       </div>
     </Shell>
   );

@@ -9,7 +9,7 @@ export const riskLevelMeta: Record<RiskLevel, { label: string; cls: string }> = 
   VERY_HIGH: { label: "خطورة مرتفعة جداً", cls: "bg-destructive text-destructive-foreground" },
 };
 
-export const CRITICAL_SYMPTOMS = ["ضيق التنفس", "زرقة الشفاه/الأطراف", "ألم صدر حاد"];
+export const CRITICAL_SYMPTOMS = ["ضيق التنفس", "زرقة الشفاه/الأطراف", "ألم صدر حاد", "انخفاض أكسجين الدم"];
 
 export interface RiskInput {
   symptoms: { name: string; severity?: number | undefined }[];

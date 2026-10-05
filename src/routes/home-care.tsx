@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { evaluatePatientStatus, riskLevelMeta } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
+import { usePatients } from "@/lib/patient-store";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -15,15 +16,7 @@ export const Route = createFileRoute("/home-care")({
   component: HomeCare,
 });
 
-const meds = [
-  { rx: "RX-2026-9941", n: "Paracetamol", d: "500 mg", times: ["08:00", "16:00", "23:00"], food: "بعد الأكل 🍽️", start: "3 أكتوبر", end: "10 أكتوبر 2026",
-    ins: "خذ قرصًا واحدًا عن طريق الفم مع الماء.", warn: "لا تتجاوز الجرعة المحددة في وصفة الطبيب." },
-  { rx: "RX-2026-9942", n: "Amoxicillin", d: "500 mg", times: ["08:00", "14:00", "20:00"], food: "مع الطعام 🥣", start: "3 أكتوبر", end: "9 أكتوبر 2026",
-    ins: "خذ كبسولة واحدة كاملة مع كوب ماء.", warn: "أكمل المدة كاملة حتى لو تحسنت." },
-  { rx: "RX-2026-9943", n: "Omeprazole", d: "20 mg", times: ["07:30"], food: "على معدة فارغة ⏳", start: "3 أكتوبر", end: "17 أكتوبر 2026",
-    ins: "خذ كبسولة واحدة قبل الإفطار بنصف ساعة.", warn: "لا تفتح الكبسولة أو تمضغها." },
-];
-const GRACE = 60, ADVANCE = 30;
+const ADVANCE = 30;
 const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h! * 60 + m!; };
 const speak = (txt: string) => {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -37,10 +30,21 @@ const modes: { v: Mode; l: string }[] = [
 ];
 type Dose = { status: "TAKEN"; at: string } | { status: "MISSED"; reason: string; severe?: string };
 
-const symptomsList = ["حرارة", "غثيان", "ضيق التنفس", "تورم الجرح", "دوخة", "زرقة الشفاه/الأطراف", "ألم صدر حاد"];
+const symptomsList = ["حرارة", "غثيان", "ضيق التنفس", "تورم الجرح", "دوخة", "زرقة الشفاه/الأطراف", "ألم صدر حاد", "انخفاض أكسجين الدم"];
 const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", "الظهر", "الأطراف"];
 
 function HomeCare() {
+  const list = usePatients();
+  const [pid, setPid] = useState("");
+  const patient = list.find((x) => x.id === pid) ?? list[0];
+  const meds = (patient?.meds ?? []).map((m) => ({ rx: `${patient!.id}-${m.id}`, n: m.name, d: m.route, times: m.times, win: m.windowMin, grace: m.missedAfterMin }));
+  const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
+  const tasks = patient ? [
+    "قياس العلامات الحيوية (الحرارة، الضغط، الأكسجين)",
+    ...patient.meds.map((m) => `إعطاء/متابعة ${m.name} (${m.route})`),
+    "تقييم مستوى الألم والأعراض",
+    ...(patient.followUp ? [`تأكيد موعد المتابعة ${patient.followUp.replace("T", " ")}`] : []),
+  ] : [];
   const [doses, setDoses] = useState<Record<string, Dose>>({});
   const [now, setNow] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STANDARD");
@@ -80,9 +84,9 @@ function HomeCare() {
     setSymDraft(""); setSymLoc(""); setSymSev("");
   };
   const enteredBy = mode === "CAREGIVER" ? ` · بواسطة المرافق ${cgId}` : "";
-  const due = meds.flatMap((m) => m.times.map((t) => ({ k: `${m.rx}-${t}`, t }))).filter((x) => now != null && toMin(x.t) <= now);
+  const due = meds.flatMap((m) => m.times.map((t) => ({ k: `${m.rx}-${t}`, t, grace: m.grace }))).filter((x) => now != null && toMin(x.t) <= now);
   const taken = due.filter((x) => doses[x.k]?.status === "TAKEN").length;
-  const missedAuto = due.filter((x) => !doses[x.k] && now! - toMin(x.t) > GRACE);
+  const missedAuto = due.filter((x) => !doses[x.k] && now! - toMin(x.t) > x.grace);
   const adherencePct = due.length ? Math.round((taken / due.length) * 100) : 100;
   const severe = Object.values(doses).find((d) => d.status === "MISSED" && d.severe) as { severe?: string } | undefined;
   const risk = evaluatePatientStatus({
@@ -97,7 +101,22 @@ function HomeCare() {
     <Shell>
       <div className={mode === "BIG_BUTTONS" ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
       <h1 className="font-display text-3xl text-ink">مهامي اليومية</h1>
-      <p className="text-sm text-muted-foreground">اليوم الرابع بعد الخروج</p>
+      <div className="card-surface mt-3 flex flex-wrap items-center gap-2 p-3">
+        <span className="text-sm font-semibold">المريض:</span>
+        <select value={patient?.id ?? ""} onChange={(e) => { setPid(e.target.value); setDoses({}); setTasksDone({}); }} className="rounded-lg border bg-background p-2 text-sm">
+          {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
+        </select>
+        {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}</span>}
+      </div>
+      <section className="card-surface mt-3 p-4">
+        <h2 className="mb-2 font-bold text-primary">📋 المهام التمريضية والطبية لليوم</h2>
+        {tasks.map((t) => (
+          <label key={t} className="flex items-center gap-2 border-t py-2 text-sm first:border-0">
+            <input type="checkbox" checked={!!tasksDone[t]} onChange={(e) => setTasksDone({ ...tasksDone, [t]: e.target.checked })} />
+            <span className={tasksDone[t] ? "line-through text-muted-foreground" : ""}>{t}</span>
+          </label>
+        ))}
+      </section>
 
       <section className="card-surface mt-4 p-4">
         <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف</p>
@@ -119,7 +138,7 @@ function HomeCare() {
       {risk.critical ? (
         <div className="mt-4 rounded-2xl bg-destructive p-5 text-destructive-foreground">
           <p className="font-bold">🚨 تم رصد علامة تستدعي تقييمًا عاجلًا</p>
-          <p className="mt-1 text-sm">سبب التنبيه: {risk.reasons.join("، ")}. الإجراء: تم إشعار الكادر التمريضي المسؤول وسيتم التواصل معك.</p>
+          <p className="mt-1 text-sm">سبب التنبيه: {risk.reasons.join("، ")}. الإجراء: تم إشعار الكادر التمريضي المسؤول وفق بروتوكول المنشأة.</p>
         </div>
       ) : (
         <div className="card-surface mt-4 flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
@@ -139,29 +158,27 @@ function HomeCare() {
             {meds.map((m) => {
               const next = m.times.find((t) => now != null && toMin(t) > now && !doses[`${m.rx}-${t}`]);
               const left = next && now != null ? toMin(next) - now : null;
-              const text = `${m.n} ${m.d}. ${m.ins} ${m.food}. ${m.warn}`;
+              const text = `${m.n}، ${m.d}، الأوقات ${m.times.join(" و ")}`;
               return (
                 <div key={m.rx} className="rounded-xl border bg-background p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div><p className="font-bold" dir="ltr">{m.n} — {m.d}</p><p className="text-xs text-muted-foreground">من {m.start} إلى {m.end}</p></div>
+                    <div><p className="font-bold" dir="ltr">{m.n}</p><p className="text-xs text-muted-foreground">{m.d}</p></div>
                     <button onClick={() => speak(text)} aria-label="استماع" className="btn bg-secondary px-2 py-1 text-secondary-foreground">🔊</button>
                   </div>
-                  <p className="mt-2 text-sm">{m.times.length} جرعات يومياً | {m.food}</p>
-                  <p className="mt-1 text-sm">{m.ins}</p>
-                  <p className="mt-1 text-xs text-destructive">⚠ {m.warn}</p>
+                  <p className="mt-2 text-sm">{m.times.length} جرعات يومياً · نافذة ±{m.win}د · فائتة بعد {m.grace}د</p>
                   {next && <p className={`mt-2 rounded-lg p-2 text-xs ${left! <= ADVANCE ? "bg-warning text-warning-foreground" : "bg-muted"}`}>الجرعة القادمة {next} · بعد {Math.floor(left! / 60)}س {left! % 60}د{left! <= ADVANCE ? " — 🔔 تنبيه مسبق" : ""}</p>}
                   <div className="mt-3 space-y-2">
                     {m.times.map((t) => {
                       const k = `${m.rx}-${t}`, d = doses[k];
                       const late = now != null && !d ? now - toMin(t) : -1;
-                      const st = d ? d.status : late > GRACE ? "MISSED" : late >= 0 ? "DELAYED" : "SCHEDULED";
+                      const st = d ? d.status : late > m.grace ? "MISSED" : late > m.win ? "DELAYED" : "SCHEDULED";
                       return (
                         <div key={t} className="rounded-lg border p-2 text-sm">
                           <div className="flex items-center justify-between gap-2">
                             <span dir="ltr" className="font-semibold">{t}</span>
-                            {d?.status === "TAKEN" ? <span className="text-xs font-semibold text-success">✓ أُخذت {d.at}</span>
+                            {d?.status === "TAKEN" ? <span className="text-xs font-semibold text-success">✓ أُعطيت {d.at}</span>
                               : d?.status === "MISSED" ? <span className="text-xs text-destructive">لم تؤخذ: {d.reason}{d.severe ? " (حادة)" : ""}</span>
-                              : <span className={`text-xs ${st === "MISSED" ? "text-destructive" : st === "DELAYED" ? "text-warning" : "text-muted-foreground"}`}>{st === "MISSED" ? "فائتة" : st === "DELAYED" ? "متأخرة" : "مجدولة"}</span>}
+                              : <span className={`text-xs ${st === "MISSED" ? "text-destructive" : st === "DELAYED" ? "text-warning" : "text-muted-foreground"}`}>{st === "MISSED" ? "فائتة" : st === "DELAYED" ? "متأخرة" : "معلقة"}</span>}
                           </div>
                           {!d && (
                             <div className="mt-2 flex gap-2">

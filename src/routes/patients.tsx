@@ -81,7 +81,7 @@ function Patients() {
           <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-3 first:border-0 text-sm">
             <div>
               <p className="font-semibold" dir="ltr">{m.name}</p>
-              <p className="text-xs text-muted-foreground">{m.route} · <span dir="ltr">{m.times.join(", ")}</span> · نافذة ±{m.missedAfterMin && m.windowMin}د · فائتة بعد {m.missedAfterMin}د</p>
+              <p className="text-xs text-muted-foreground">{m.route} · <span dir="ltr">{m.times.join(", ")}</span> · نافذة ±{m.windowMin}د · فائتة بعد {m.missedAfterMin}د</p>
             </div>
             <div className="flex gap-2 text-xs">
               <button onClick={() => setMed(m)} className="text-primary">تعديل</button>

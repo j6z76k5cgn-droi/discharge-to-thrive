@@ -66,5 +66,3 @@ export const patientStore = {
 };
 export const newId = () => Math.random().toString(36).slice(2, 9);
 export const emptyPatient = (): ManagedPatient => ({ id: newId(), name: "", mrn: "", ward: "", room: "", phone: "", email: "", followUp: "", notes: "", meds: [], discharge: {} });
-
-export function PatientInfo({ p }: { p: ManagedPatient }) { void p; return null; }

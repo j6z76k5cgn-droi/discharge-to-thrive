@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
+import { patientStore, usePatients } from "@/lib/patient-store";
 
 export const Route = createFileRoute("/discharge")({
   head: () => ({
@@ -74,8 +75,14 @@ function calc(ans: Record<string, Ans>) {
 }
 
 function Discharge() {
-  const [ans, setAns] = useState<Record<string, Ans>>({});
-  const [done, setDone] = useState(false);
+  const list = usePatients();
+  const [pid, setPid] = useState("");
+  const p = list.find((x) => x.id === pid) ?? list[0];
+  const ans = (p?.discharge ?? {}) as Record<string, Ans>;
+  const setAns = (a: Record<string, Ans>) => p && patientStore.setDischarge(p.id, a);
+  const [doneFor, setDoneFor] = useState<string | null>(null);
+  const done = !!p && doneFor === p.id;
+  const setDone = (_: boolean) => p && setDoneFor(p.id);
   const allQ = domains.flatMap((d) => d.qs);
   const complete = allQ.every((q) => ans[q.id]);
   const { score, concerns, perDomain } = calc(ans);
@@ -84,12 +91,30 @@ function Discharge() {
     : score >= 90 ? { l: "🟢 جاهزية عالية", c: "text-success", b: "bg-success" }
     : score >= 75 ? { l: "🟡 يحتاج استكمال متطلبات بسيطة", c: "text-warning", b: "bg-warning" }
     : { l: "🟠 يحتاج تقييم إضافي وتدخل سريري", c: "text-warning", b: "bg-warning" };
+  const completion = Math.round((allQ.filter((q) => ans[q.id]).length / allQ.length) * 100);
   const ready = complete && !concerns.length && score >= 90;
+  if (!p) return <Shell><p>لا يوجد مرضى. أضف مريضاً من صفحة «المرضى».</p></Shell>;
 
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">تقييم جاهزية الخروج</h1>
-      <p className="mt-1 text-sm text-muted-foreground">7 مجالات موزونة · البنود المعلَّمة ⚠️ بنود أمان حرجة — النظام يقدّم توصية ولا ينوب عن القرار الطبي.</p>
+      <div className="card-surface mt-4 p-4">
+        <label className="text-sm font-semibold">اختر المريض
+          <select value={p.id} onChange={(e) => setPid(e.target.value)} className="mr-2 rounded-lg border bg-background p-2 text-sm">
+            {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
+          </select>
+        </label>
+        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+          <p><span className="text-muted-foreground">الملف:</span> <span dir="ltr">{p.mrn}</span></p>
+          <p><span className="text-muted-foreground">القسم/الغرفة:</span> {p.ward} · {p.room}</p>
+          <p><span className="text-muted-foreground">الهاتف:</span> <span dir="ltr">{p.phone}</span></p>
+          <p><span className="text-muted-foreground">البريد:</span> <span dir="ltr">{p.email}</span></p>
+          <p><span className="text-muted-foreground">المتابعة:</span> <span dir="ltr">{p.followUp.replace("T", " ")}</span></p>
+          <p><span className="text-muted-foreground">الأدوية:</span> {p.meds.map((m) => m.name).join("، ") || "—"}</p>
+        </div>
+        {p.notes && <p className="mt-2 text-xs text-muted-foreground">ملاحظات: {p.notes}</p>}
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">7 مجالات موزونة · البنود المعلَّمة ⚠️ بنود أمان حرجة — النظام يقدّم توصية ولا ينوب عن القرار الطبي.</p>
 
       {concerns.length > 0 && (
         <div className="mt-5 rounded-2xl bg-destructive p-5 text-destructive-foreground">
@@ -131,6 +156,8 @@ function Discharge() {
             <div className={`h-full transition-all ${level.b}`} style={{ width: `${score}%` }} />
           </div>
           <p className={`mt-3 text-sm font-semibold ${level.c}`}>{level.l}</p>
+          <p className="mt-3 text-xs font-semibold">اكتمال القائمة {completion}%</p>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${completion}%` }} /></div>
           <p className="mt-1 text-xs text-muted-foreground">أُجيب على {Object.keys(ans).length} من {allQ.length} · الحد الأدنى 90%</p>
           <button disabled={!ready} onClick={() => setDone(true)}
             className="btn mt-4 w-full bg-primary text-primary-foreground disabled:opacity-40">اعتماد الخروج</button>

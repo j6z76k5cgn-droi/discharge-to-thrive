@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { evaluatePatientStatus, riskLevelMeta } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
-import { usePatients } from "@/lib/patient-store";
+import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
+import { useRole } from "@/lib/role-store";
+import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult } from "@/lib/vitals-engine";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -35,29 +37,68 @@ const sites = ["الرأس", "الصدر", "البطن", "موضع الجرح", 
 
 function HomeCare() {
   const list = usePatients();
+  const role = useRole();
   const [pid, setPid] = useState("");
   const patient = list.find((x) => x.id === pid) ?? list[0];
+  const readOnly = role === "nurse";
+  return (
+    <Shell>
+      <h1 className="font-display text-3xl text-ink">{readOnly ? "المتابعة المنزلية — بيانات المريض" : "مهامي اليومية"}</h1>
+      <div className="card-surface mt-3 flex flex-wrap items-center gap-2 p-3">
+        <span className="text-sm font-semibold">{readOnly ? "عرض بيانات:" : "أنا:"}</span>
+        <select value={patient?.id ?? ""} onChange={(e) => setPid(e.target.value)} className="rounded-lg border bg-background p-2 text-sm">
+          {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
+        </select>
+        {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}{patient.home?.updatedAt ? ` · آخر تحديث ${new Date(patient.home.updatedAt).toLocaleString("ar-SA")}` : ""}</span>}
+      </div>
+      {readOnly && <p className="mt-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">👁️ عرض للقراءة فقط — هذه البيانات أدخلها المريض بنفسه.</p>}
+      {patient && <Body key={patient.id} patient={patient} readOnly={readOnly} />}
+    </Shell>
+  );
+}
+
+function Say({ t }: { t: string }) {
+  return <button type="button" onClick={() => speak(t)} aria-label="اقرأ لي" className="btn mr-2 bg-secondary px-2 py-0.5 text-sm text-secondary-foreground">🔊</button>;
+}
+
+function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolean }) {
+  const h = patient.home;
   const meds = (patient?.meds ?? []).map((m) => ({ rx: `${patient!.id}-${m.id}`, n: m.name, d: m.route, times: m.times, win: m.windowMin, grace: m.missedAfterMin }));
-  const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
-  const tasks = patient ? [
-    "قياس العلامات الحيوية (الحرارة، الضغط، الأكسجين)",
-    ...patient.meds.map((m) => `إعطاء/متابعة ${m.name} (${m.route})`),
-    "تقييم مستوى الألم والأعراض",
-    ...(patient.followUp ? [`تأكيد موعد المتابعة ${patient.followUp.replace("T", " ")}`] : []),
-  ] : [];
-  const [doses, setDoses] = useState<Record<string, Dose>>({});
+  const [doses, setDoses] = useState<Record<string, Dose>>(h?.doses ?? {});
   const [now, setNow] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STANDARD");
   const [cgId, setCgId] = useState("CG-8821");
   useEffect(() => { const f = () => { const d = new Date(); setNow(d.getHours() * 60 + d.getMinutes()); }; f(); const t = setInterval(f, 30000); return () => clearInterval(t); }, []);
-  const [painBySite, setPainBySite] = useState<Record<string, number>>({});
-  const [sitesSel, setSitesSel] = useState<string[]>([]);
-  const [sym, setSym] = useState<string[]>([]);
-  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string | undefined; sev?: string | undefined }[]>([]);
+  const [painBySite, setPainBySite] = useState<Record<string, number>>(h?.painBySite ?? {});
+  const [sitesSel, setSitesSel] = useState<string[]>(h?.sitesSel ?? []);
+  const [sym, setSym] = useState<string[]>(h?.sym ?? []);
+  const [customSyms, setCustomSyms] = useState<{ name: string; loc?: string | undefined; sev?: string | undefined }[]>(h?.customSyms ?? []);
   const [symDraft, setSymDraft] = useState("");
   const [symLoc, setSymLoc] = useState("");
   const [symSev, setSymSev] = useState("");
-  const [notes, setNotes] = useState<{ t: string; time: string }[]>([]);
+  const [notes, setNotes] = useState<{ t: string; time: string }[]>(h?.notes ?? []);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (readOnly) return;
+    patientStore.setHome(patient.id, { doses, painBySite, sitesSel, sym, customSyms, notes, updatedAt: new Date().toISOString() });
+  }, [doses, painBySite, sitesSel, sym, customSyms, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [gCtx, setGCtx] = useState<string>(glucoseContexts[0]);
+  const [gVal, setGVal] = useState("");
+  const [sys, setSys] = useState("");
+  const [dia, setDia] = useState("");
+  const [vRes, setVRes] = useState<VResult[]>([]);
+  const saveVitals = () => {
+    const out: VResult[] = [];
+    const by = mode === "CAREGIVER" ? `المرافق ${cgId}` : "المريض";
+    const at = new Date().toISOString();
+    const g = Number(gVal), s1 = Number(sys), d1 = Number(dia);
+    if (gVal && g > 0) { const r = classifyGlucose(gCtx, g); out.push(r); patientStore.addVital(patient.id, { id: newId(), at, kind: "glucose", context: gCtx, glucose: g, level: r.level, label: r.label, by }); }
+    if (sys && dia && s1 > 0 && d1 > 0) { const r = classifyBP(s1, d1); out.push(r); patientStore.addVital(patient.id, { id: newId(), at, kind: "bp", sys: s1, dia: d1, level: r.level, label: r.label, by }); }
+    if (!out.length) { alert("أدخل قراءة السكر أو الرقمين الأعلى والأسفل للضغط"); return; }
+    setVRes(out); setGVal(""); setSys(""); setDia("");
+    speak(out.map((r) => r.title + ". " + r.advice.join(" ")).join(" "));
+  };
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
   const recRef = useRef<any>(null);
@@ -98,28 +139,10 @@ function HomeCare() {
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
 
   return (
-    <Shell>
+    <fieldset disabled={readOnly} className="min-w-0">
       <div className={mode === "BIG_BUTTONS" ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
-      <h1 className="font-display text-3xl text-ink">مهامي اليومية</h1>
-      <div className="card-surface mt-3 flex flex-wrap items-center gap-2 p-3">
-        <span className="text-sm font-semibold">المريض:</span>
-        <select value={patient?.id ?? ""} onChange={(e) => { setPid(e.target.value); setDoses({}); setTasksDone({}); }} className="rounded-lg border bg-background p-2 text-sm">
-          {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
-        </select>
-        {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}</span>}
-      </div>
-      <section className="card-surface mt-3 p-4">
-        <h2 className="mb-2 font-bold text-primary">📋 المهام التمريضية والطبية لليوم</h2>
-        {tasks.map((t) => (
-          <label key={t} className="flex items-center gap-2 border-t py-2 text-sm first:border-0">
-            <input type="checkbox" checked={!!tasksDone[t]} onChange={(e) => setTasksDone({ ...tasksDone, [t]: e.target.checked })} />
-            <span className={tasksDone[t] ? "line-through text-muted-foreground" : ""}>{t}</span>
-          </label>
-        ))}
-      </section>
-
       <section className="card-surface mt-4 p-4">
-        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف</p>
+        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف <span className="text-xs font-normal text-muted-foreground">(اضغط 🔊 بجانب أي قسم ليُقرأ لك)</span></p>
         <div className="flex flex-wrap gap-2">
           {modes.map((m) => (
             <button key={m.v} onClick={() => setMode(m.v)} className={`btn px-3 py-1.5 text-sm ${mode === m.v ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{m.l}</button>
@@ -149,7 +172,7 @@ function HomeCare() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <section className="card-surface p-5 md:col-span-2">
-          <h2 className="mb-1 font-bold text-primary">💊 دليل العلاج وتتبع الجرعات</h2>
+          <h2 className="mb-1 font-bold text-primary">💊 دليل العلاج وتتبع الجرعات<Say t={`دليل العلاج. أدويتك: ${meds.map((m) => `${m.n} في الأوقات ${m.times.join(" و ")}`).join("، ")}. اضغط أخذت الدواء بعد كل جرعة.`} /></h2>
           <p className="mb-3 text-xs text-muted-foreground">التعليمات منقولة حرفيًا من وصفة الطبيب المعتمدة — لا يتم توليدها أو تعديلها آليًا.</p>
           {missedAuto.length > 0 && (
             <p className="mb-3 rounded-lg bg-warning p-2 text-sm text-warning-foreground">⏰ {missedAuto.length} جرعة تجاوزت فترة السماح (60 دقيقة) — تم إشعار الممرض المتابع.</p>
@@ -209,8 +232,49 @@ function HomeCare() {
           </div>
         </section>
 
+        <section className="card-surface p-5 md:col-span-2">
+          <h2 className="mb-3 font-bold text-primary">🩸 قياساتي (السكر والضغط)<Say t="قياساتي. أدخل قراءة السكر وحالتك، ثم ضغط الدم: الرقم الأعلى هو الانقباضي، والرقم الأسفل هو الانبساطي، مثل مئة وعشرين على ثمانين. ثم اضغط حفظ وإرسال." /></h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border bg-background p-4">
+              <p className="mb-2 font-semibold">سكر الدم (mg/dL)<Say t="سكر الدم. اختر حالتك: صائم، أو بعد الأكل بساعتين، أو قبل النوم، أو عشوائي، ثم اكتب الرقم الظاهر في جهاز السكر." /></p>
+              <div className="flex flex-wrap gap-2">
+                {glucoseContexts.map((c) => (
+                  <button type="button" key={c} onClick={() => setGCtx(c)} className={`btn px-3 py-1 text-sm ${gCtx === c ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{c}</button>
+                ))}
+              </div>
+              <input inputMode="numeric" type="number" value={gVal} onChange={(e) => setGVal(e.target.value)} placeholder="مثال: 110"
+                className="mt-3 w-full rounded-lg border bg-background p-3 text-center text-2xl font-bold" />
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <p className="mb-2 font-semibold">ضغط الدم (mmHg)<Say t="ضغط الدم. في الجهاز رقمان: الرقم الأعلى أو الأكبر هو الانقباضي، والرقم الأسفل أو الأصغر هو الانبساطي. مثال: مئة وعشرون على ثمانين." /></p>
+              <p className="mb-2 text-xs text-muted-foreground">في جهاز الضغط رقمان: الأعلى (الأكبر) والأسفل (الأصغر). مثال: <b dir="ltr">120 / 80</b></p>
+              <div className="flex items-end gap-2">
+                <label className="flex-1 text-xs">الرقم الأعلى (الانقباضي Systolic)
+                  <input inputMode="numeric" type="number" value={sys} onChange={(e) => setSys(e.target.value)} placeholder="120" className="mt-1 w-full rounded-lg border bg-background p-3 text-center text-2xl font-bold" /></label>
+                <span className="pb-3 text-2xl">/</span>
+                <label className="flex-1 text-xs">الرقم الأسفل (الانبساطي Diastolic)
+                  <input inputMode="numeric" type="number" value={dia} onChange={(e) => setDia(e.target.value)} placeholder="80" className="mt-1 w-full rounded-lg border bg-background p-3 text-center text-2xl font-bold" /></label>
+              </div>
+            </div>
+          </div>
+          <button type="button" onClick={saveVitals} className="btn mt-3 w-full bg-primary py-3 text-primary-foreground">💾 حفظ وإرسال</button>
+          {vRes.map((r) => (
+            <div key={r.label} className={`mt-3 rounded-xl p-4 ${vLevelMeta[r.level].cls}`}>
+              <p className="font-bold">{r.title} — {r.label}</p>
+              <ul className="mt-1 list-inside list-disc text-sm">{r.advice.map((x) => <li key={x}>{x}</li>)}</ul>
+              {r.level !== "normal" && patient.plan && <p className="mt-2 rounded-lg bg-card p-2 text-sm text-foreground">📌 يرجى اتباع تعليمات طبيبك: {patient.plan}</p>}
+              {r.level !== "normal" && <p className="mt-2 text-xs">تم إشعار الكادر التمريضي المسؤول وفق بروتوكول المنشأة.</p>}
+            </div>
+          ))}
+          {(patient.vitals?.length ?? 0) > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+              {[...patient.vitals!].reverse().slice(0, 5).map((v) => <li key={v.id}>{new Date(v.at).toLocaleString("ar-SA")} — {v.label} · {vLevelMeta[v.level].label}</li>)}
+            </ul>
+          )}
+        </section>
+
         <section className="card-surface p-5">
-          <h2 className="mb-3 font-bold text-primary">📊 مستوى الألم</h2>
+          <h2 className="mb-3 font-bold text-primary">📊 مستوى الألم<Say t="مستوى الألم. اختر مكان الألم، ويمكنك اختيار أكثر من مكان، ثم قيّم كل مكان من صفر لا ألم إلى عشرة ألم شديد." /></h2>
           <p className="mb-2 text-sm font-semibold">مكان الألم <span className="text-xs font-normal text-muted-foreground">(يمكن اختيار أكثر من مكان)</span></p>
           <div className="flex flex-wrap gap-2">
             {sites.map((s) => {
@@ -239,7 +303,7 @@ function HomeCare() {
         </section>
 
         <section className="card-surface p-5">
-          <h2 className="mb-3 font-bold text-primary">🩺 الأعراض اليومية</h2>
+          <h2 className="mb-3 font-bold text-primary">🩺 الأعراض اليومية<Say t={`الأعراض اليومية. هل تعاني اليوم من أي مما يلي: ${symptomsList.join("، ")}. ويمكنك إضافة عرض آخر غير مذكور.`} /></h2>
           <p className="mb-2 text-sm text-muted-foreground">هل تعاني اليوم من أي مما يلي؟</p>
           <div className="flex flex-wrap gap-2">
             {[...symptomsList, ...customSyms.map((c) => c.name)].map((s) => {
@@ -287,7 +351,7 @@ function HomeCare() {
         </section>
 
         <section className="card-surface p-5">
-          <h2 className="mb-3 font-bold text-primary">🎙️ المساعد الصوتي / النصي</h2>
+          <h2 className="mb-3 font-bold text-primary">🎙️ المساعد الصوتي / النصي<Say t="المساعد. اكتب أو سجّل بصوتك ما تشعر به ثم اضغط إضافة." /></h2>
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} placeholder="اكتب أو سجّل ما تشعر به..."
             className="w-full rounded-lg border bg-background p-2 text-sm" />
           <div className="mt-2 flex gap-2">
@@ -311,6 +375,6 @@ function HomeCare() {
         </section>
       </div>
       </div>
-    </Shell>
+    </fieldset>
   );
 }

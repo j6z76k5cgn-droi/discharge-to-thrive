@@ -20,6 +20,31 @@ export interface ManagedPatient {
   notes: string;
   meds: MedPlan[];
   discharge: Record<string, string>; // questionId -> answer
+  plan?: string; // خطة علاجية مخصصة من الكادر الصحي
+  vitals?: VitalEntry[];
+  home?: HomeData;
+  tasksDone?: Record<string, boolean>;
+}
+export interface VitalEntry {
+  id: string;
+  at: string; // ISO timestamp
+  kind: "glucose" | "bp";
+  context?: string;
+  glucose?: number;
+  sys?: number;
+  dia?: number;
+  level: "normal" | "warn" | "danger";
+  label: string;
+  by: string;
+}
+export interface HomeData {
+  doses: Record<string, { status: "TAKEN"; at: string } | { status: "MISSED"; reason: string; severe?: string }>;
+  painBySite: Record<string, number>;
+  sitesSel: string[];
+  sym: string[];
+  customSyms: { name: string; loc?: string | undefined; sev?: string | undefined }[];
+  notes: { t: string; time: string }[];
+  updatedAt?: string;
 }
 
 const KEY = "midad.patients.v1";
@@ -62,6 +87,9 @@ export function usePatients() {
 export const patientStore = {
   save(p: ManagedPatient) { set(state.some((x) => x.id === p.id) ? state.map((x) => (x.id === p.id ? p : x)) : [...state, p]); },
   remove(id: string) { set(state.filter((x) => x.id !== id)); },
+  addVital(id: string, v: VitalEntry) { set(state.map((x) => (x.id === id ? { ...x, vitals: [...(x.vitals ?? []), v] } : x))); },
+  setHome(id: string, home: HomeData) { set(state.map((x) => (x.id === id ? { ...x, home } : x))); },
+  setTasks(id: string, tasksDone: Record<string, boolean>) { set(state.map((x) => (x.id === id ? { ...x, tasksDone } : x))); },
   setDischarge(id: string, answers: Record<string, string>) { set(state.map((x) => (x.id === id ? { ...x, discharge: answers } : x))); },
 };
 export const newId = () => Math.random().toString(36).slice(2, 9);

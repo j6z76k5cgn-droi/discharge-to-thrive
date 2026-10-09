@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { evaluatePatientStatus, riskLevelMeta } from "@/lib/risk-engine";
+import { evaluatePatientStatus } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
 import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
 import { useRole } from "@/lib/role-store";
@@ -44,13 +44,15 @@ function HomeCare() {
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">{readOnly ? "المتابعة المنزلية — بيانات المريض" : "مهامي اليومية"}</h1>
-      <div className="card-surface mt-3 flex flex-wrap items-center gap-2 p-3">
-        <span className="text-sm font-semibold">{readOnly ? "عرض بيانات:" : "أنا:"}</span>
-        <select value={patient?.id ?? ""} onChange={(e) => setPid(e.target.value)} className="rounded-lg border bg-background p-2 text-sm">
-          {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
-        </select>
-        {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}{patient.home?.updatedAt ? ` · آخر تحديث ${new Date(patient.home.updatedAt).toLocaleString("ar-SA")}` : ""}</span>}
-      </div>
+      {readOnly && (
+        <div className="card-surface mt-3 flex flex-wrap items-center gap-2 p-3">
+          <span className="text-sm font-semibold">عرض بيانات:</span>
+          <select value={patient?.id ?? ""} onChange={(e) => setPid(e.target.value)} className="rounded-lg border bg-background p-2 text-sm">
+            {list.map((x) => <option key={x.id} value={x.id}>{x.name} — {x.mrn}</option>)}
+          </select>
+          {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}{patient.home?.updatedAt ? ` · آخر تحديث ${new Date(patient.home.updatedAt).toLocaleString("ar-SA")}` : ""}</span>}
+        </div>
+      )}
       {readOnly && <p className="mt-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">👁️ عرض للقراءة فقط — هذه البيانات أدخلها المريض بنفسه.</p>}
       {patient && <Body key={patient.id} patient={patient} readOnly={readOnly} />}
     </Shell>
@@ -68,6 +70,10 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const [now, setNow] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STANDARD");
   const [cgId, setCgId] = useState("CG-8821");
+  const vKey = `midad.vitalsOn.${patient.id}`;
+  const [vitalsOn, setVitalsOn] = useState(false);
+  useEffect(() => { setVitalsOn(localStorage.getItem(vKey) === "1"); }, [vKey]);
+  const toggleVitals = (v: boolean) => { setVitalsOn(v); localStorage.setItem(vKey, v ? "1" : "0"); };
   useEffect(() => { const f = () => { const d = new Date(); setNow(d.getHours() * 60 + d.getMinutes()); }; f(); const t = setInterval(f, 30000); return () => clearInterval(t); }, []);
   const [painBySite, setPainBySite] = useState<Record<string, number>>(h?.painBySite ?? {});
   const [sitesSel, setSitesSel] = useState<string[]>(h?.sitesSel ?? []);
@@ -156,17 +162,18 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
             <span className="text-xs">كل إدخال يُسجَّل باسم المرافق (entered_by: CAREGIVER) لمراجعة التمريض.</span>
           </div>
         )}
+        {!readOnly && (
+          <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
+            <input type="checkbox" checked={vitalsOn} onChange={(e) => toggleVitals(e.target.checked)} className="h-5 w-5 accent-primary" />
+            🩸 تفعيل قياسات السكر والضغط
+          </label>
+        )}
       </section>
 
-      {risk.critical ? (
+      {risk.critical && (
         <div className="mt-4 rounded-2xl bg-destructive p-5 text-destructive-foreground">
           <p className="font-bold">🚨 تم رصد علامة تستدعي تقييمًا عاجلًا</p>
-          <p className="mt-1 text-sm">سبب التنبيه: {risk.reasons.join("، ")}. الإجراء: تم إشعار الكادر التمريضي المسؤول وفق بروتوكول المنشأة.</p>
-        </div>
-      ) : (
-        <div className="card-surface mt-4 flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
-          <span>البيانات مسجلة والمتابعة مستمرة.</span>
-          <span className={`rounded-full px-3 py-1 font-semibold ${riskLevelMeta[risk.level].cls}`}>مؤشر المتابعة: {riskLevelMeta[risk.level].label}</span>
+          <p className="mt-1 text-sm">تم إشعار الكادر التمريضي المسؤول وفق بروتوكول المنشأة.</p>
         </div>
       )}
 
@@ -232,7 +239,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
           </div>
         </section>
 
-        <section className="card-surface p-5 md:col-span-2">
+        {(vitalsOn || readOnly) && <section className="card-surface p-5 md:col-span-2">
           <h2 className="mb-3 font-bold text-primary">🩸 قياساتي (السكر والضغط)<Say t="قياساتي. أدخل قراءة السكر وحالتك، ثم ضغط الدم: الرقم الأعلى هو الانقباضي، والرقم الأسفل هو الانبساطي، مثل مئة وعشرين على ثمانين. ثم اضغط حفظ وإرسال." /></h2>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border bg-background p-4">
@@ -271,7 +278,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
               {[...patient.vitals!].reverse().slice(0, 5).map((v) => <li key={v.id}>{new Date(v.at).toLocaleString("ar-SA")} — {v.label} · {vLevelMeta[v.level].label}</li>)}
             </ul>
           )}
-        </section>
+        </section>}
 
         <section className="card-surface p-5">
           <h2 className="mb-3 font-bold text-primary">📊 مستوى الألم<Say t="مستوى الألم. اختر مكان الألم، ويمكنك اختيار أكثر من مكان، ثم قيّم كل مكان من صفر لا ألم إلى عشرة ألم شديد." /></h2>

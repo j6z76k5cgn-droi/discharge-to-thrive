@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { evaluatePatientStatus } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
 import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
@@ -59,7 +59,9 @@ function HomeCare() {
   );
 }
 
+const ReadCtx = createContext(false);
 function Say({ t }: { t: string }) {
+  if (!useContext(ReadCtx)) return null;
   return <button type="button" onClick={() => speak(t)} aria-label="اقرأ لي" className="btn mr-2 bg-secondary px-2 py-0.5 text-sm text-secondary-foreground">🔊</button>;
 }
 
@@ -70,10 +72,16 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const [now, setNow] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STANDARD");
   const [cgId, setCgId] = useState("CG-8821");
-  const vKey = `midad.vitalsOn.${patient.id}`;
-  const [vitalsOn, setVitalsOn] = useState(false);
-  useEffect(() => { setVitalsOn(localStorage.getItem(vKey) === "1"); }, [vKey]);
-  const toggleVitals = (v: boolean) => { setVitalsOn(v); localStorage.setItem(vKey, v ? "1" : "0"); };
+  const pk = (k: string) => `midad.opt.${k}.${patient.id}`;
+  const [gOn, setGOn] = useState(false);
+  const [bOn, setBOn] = useState(false);
+  const [readAloud, setReadAloud] = useState(false);
+  useEffect(() => {
+    setGOn(localStorage.getItem(pk("g")) === "1"); setBOn(localStorage.getItem(pk("b")) === "1"); setReadAloud(localStorage.getItem(pk("read")) === "1");
+  }, [patient.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (k: "g" | "b" | "read", v: boolean) => {
+    (k === "g" ? setGOn : k === "b" ? setBOn : setReadAloud)(v); localStorage.setItem(pk(k), v ? "1" : "0");
+  };
   useEffect(() => { const f = () => { const d = new Date(); setNow(d.getHours() * 60 + d.getMinutes()); }; f(); const t = setInterval(f, 30000); return () => clearInterval(t); }, []);
   const [painBySite, setPainBySite] = useState<Record<string, number>>(h?.painBySite ?? {});
   const [sitesSel, setSitesSel] = useState<string[]>(h?.sitesSel ?? []);
@@ -109,13 +117,26 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const [listening, setListening] = useState(false);
   const recRef = useRef<any>(null);
 
-  const startVoice = () => {
+  const startVoice = async () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("المتصفح لا يدعم التسجيل الصوتي"); return; }
-    const r = new SR(); r.lang = "ar-SA"; r.interimResults = false;
-    r.onresult = (e: any) => setDraft((d) => (d ? d + " " : "") + e.results[0][0].transcript);
+    if (!SR) { alert("متصفحك لا يدعم التسجيل الصوتي. جرّب متصفح Google Chrome أو اكتب ما تشعر به."); return; }
+    try { const s = await navigator.mediaDevices?.getUserMedia({ audio: true }); s?.getTracks().forEach((t) => t.stop()); }
+    catch { alert("يرجى السماح باستخدام الميكروفون من إعدادات المتصفح."); return; }
+    const r = new SR(); r.lang = "ar-SA"; r.interimResults = false; r.continuous = true;
+    r.onresult = (e: any) => {
+      let txt = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) txt += e.results[i][0].transcript;
+      if (txt) setDraft((d) => (d ? d + " " : "") + txt.trim());
+    };
+    r.onerror = (e: any) => {
+      setListening(false);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") alert("يرجى السماح باستخدام الميكروفون. إذا كنت داخل نافذة المعاينة افتح التطبيق في صفحة مستقلة.");
+      else if (e.error === "no-speech") alert("لم يُسمع صوت، حاول مرة أخرى.");
+      else if (e.error === "network") alert("التسجيل الصوتي يحتاج اتصال إنترنت.");
+    };
     r.onend = () => setListening(false);
-    recRef.current = r; r.start(); setListening(true);
+    recRef.current = r;
+    try { r.start(); setListening(true); } catch { setListening(false); }
   };
   const addNote = () => {
     if (!draft.trim()) return;
@@ -145,15 +166,15 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
 
   return (
+    <ReadCtx.Provider value={readAloud}>
     <fieldset disabled={readOnly} className="min-w-0">
       <div className={mode === "BIG_BUTTONS" ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
       <section className="card-surface mt-4 p-4">
-        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف <span className="text-xs font-normal text-muted-foreground">(اضغط 🔊 بجانب أي قسم ليُقرأ لك)</span></p>
+        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف</p>
         <div className="flex flex-wrap gap-2">
           {modes.map((m) => (
             <button key={m.v} onClick={() => setMode(m.v)} className={`btn px-3 py-1.5 text-sm ${mode === m.v ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{m.l}</button>
           ))}
-          <button onClick={() => speak("مهامي اليومية. سجّل أدويتك، ومستوى الألم، والأعراض.")} className="btn bg-secondary px-3 py-1.5 text-sm text-secondary-foreground">🔊 اقرأ لي</button>
         </div>
         {mode === "CAREGIVER" && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">
@@ -163,10 +184,14 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
           </div>
         )}
         {!readOnly && (
-          <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
-            <input type="checkbox" checked={vitalsOn} onChange={(e) => toggleVitals(e.target.checked)} className="h-5 w-5 accent-primary" />
-            🩸 تفعيل قياسات السكر والضغط
-          </label>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {([["read", "🔊 اقرأ لي", readAloud], ["g", "🩸 قياس السكر", gOn], ["b", "💓 قياس الضغط", bOn]] as const).map(([k, l, v]) => (
+              <label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
+                <input type="checkbox" checked={v} onChange={(e) => toggle(k, e.target.checked)} className="h-5 w-5 accent-primary" />
+                {l}
+              </label>
+            ))}
+          </div>
         )}
       </section>
 
@@ -193,7 +218,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
                 <div key={m.rx} className="rounded-xl border bg-background p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div><p className="font-bold" dir="ltr">{m.n}</p><p className="text-xs text-muted-foreground">{m.d}</p></div>
-                    <button onClick={() => speak(text)} aria-label="استماع" className="btn bg-secondary px-2 py-1 text-secondary-foreground">🔊</button>
+                    {readAloud && <button onClick={() => speak(text)} aria-label="استماع" className="btn bg-secondary px-2 py-1 text-secondary-foreground">🔊</button>}
                   </div>
                   <p className="mt-2 text-sm">{m.times.length} جرعات يومياً · نافذة ±{m.win}د · فائتة بعد {m.grace}د</p>
                   {next && <p className={`mt-2 rounded-lg p-2 text-xs ${left! <= ADVANCE ? "bg-warning text-warning-foreground" : "bg-muted"}`}>الجرعة القادمة {next} · بعد {Math.floor(left! / 60)}س {left! % 60}د{left! <= ADVANCE ? " — 🔔 تنبيه مسبق" : ""}</p>}
@@ -239,10 +264,10 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
           </div>
         </section>
 
-        {(vitalsOn || readOnly) && <section className="card-surface p-5 md:col-span-2">
-          <h2 className="mb-3 font-bold text-primary">🩸 قياساتي (السكر والضغط)<Say t="قياساتي. أدخل قراءة السكر وحالتك، ثم ضغط الدم: الرقم الأعلى هو الانقباضي، والرقم الأسفل هو الانبساطي، مثل مئة وعشرين على ثمانين. ثم اضغط حفظ وإرسال." /></h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border bg-background p-4">
+        {(gOn || bOn || readOnly) && <section className="card-surface p-5 md:col-span-2">
+          <h2 className="mb-3 font-bold text-primary">🩸 قياساتي<Say t="قياساتي. أدخل القراءة ثم اضغط حفظ وإرسال." /></h2>
+          <div className={`grid gap-4 ${(gOn || readOnly) && (bOn || readOnly) ? "md:grid-cols-2" : ""}`}>
+            {(gOn || readOnly) && <div className="rounded-xl border bg-background p-4">
               <p className="mb-2 font-semibold">سكر الدم (mg/dL)<Say t="سكر الدم. اختر حالتك: صائم، أو بعد الأكل بساعتين، أو قبل النوم، أو عشوائي، ثم اكتب الرقم الظاهر في جهاز السكر." /></p>
               <div className="flex flex-wrap gap-2">
                 {glucoseContexts.map((c) => (
@@ -251,8 +276,8 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
               </div>
               <input inputMode="numeric" type="number" value={gVal} onChange={(e) => setGVal(e.target.value)} placeholder="مثال: 110"
                 className="mt-3 w-full rounded-lg border bg-background p-3 text-center text-2xl font-bold" />
-            </div>
-            <div className="rounded-xl border bg-background p-4">
+            </div>}
+            {(bOn || readOnly) && <div className="rounded-xl border bg-background p-4">
               <p className="mb-2 font-semibold">ضغط الدم (mmHg)<Say t="ضغط الدم. في الجهاز رقمان: الرقم الأعلى أو الأكبر هو الانقباضي، والرقم الأسفل أو الأصغر هو الانبساطي. مثال: مئة وعشرون على ثمانين." /></p>
               <p className="mb-2 text-xs text-muted-foreground">في جهاز الضغط رقمان: الأعلى (الأكبر) والأسفل (الأصغر). مثال: <b dir="ltr">120 / 80</b></p>
               <div className="flex items-end gap-2">
@@ -262,7 +287,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
                 <label className="flex-1 text-xs">الرقم الأسفل (الانبساطي Diastolic)
                   <input inputMode="numeric" type="number" value={dia} onChange={(e) => setDia(e.target.value)} placeholder="80" className="mt-1 w-full rounded-lg border bg-background p-3 text-center text-2xl font-bold" /></label>
               </div>
-            </div>
+            </div>}
           </div>
           <button type="button" onClick={saveVitals} className="btn mt-3 w-full bg-primary py-3 text-primary-foreground">💾 حفظ وإرسال</button>
           {vRes.map((r) => (
@@ -383,5 +408,6 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
       </div>
       </div>
     </fieldset>
+    </ReadCtx.Provider>
   );
 }

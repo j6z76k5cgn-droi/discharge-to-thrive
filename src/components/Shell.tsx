@@ -34,9 +34,6 @@ export function Shell({ children }: { children: ReactNode }) {
                 </Link>
               ))}
               <span className="mx-1 rounded-full bg-primary px-3 py-1 text-xs text-primary-foreground">{role === "patient" ? "🧑 مريض" : "🩺 ممرض"}</span>
-              <button onClick={() => setRole(role === "patient" ? "nurse" : "patient")} className="rounded-lg border px-2 py-1 text-xs">
-                تبديل إلى {role === "patient" ? "ممرض" : "مريض"}
-              </button>
             </nav>
           )}
         </div>

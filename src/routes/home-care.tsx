@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { evaluatePatientStatus, riskLevelMeta } from "@/lib/risk-engine";
+import { evaluatePatientStatus } from "@/lib/risk-engine";
 import { Shell } from "@/components/Shell";
 import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
 import { useRole } from "@/lib/role-store";

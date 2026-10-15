@@ -24,6 +24,18 @@ export interface ManagedPatient {
   vitals?: VitalEntry[];
   home?: HomeData;
   tasksDone?: Record<string, boolean>;
+  symptomReports?: SymptomReport[];
+}
+export interface SymptomReport {
+  id: string;
+  patientId: string;
+  at: string;
+  symptoms: string[];
+  tier: "HOME" | "URGENT" | "EMERGENCY";
+  critical: boolean;
+  score: number;
+  advice: { name: string; now: string[]; avoid: string[]; when: string }[];
+  resolved?: { at: string; by: string };
 }
 export interface VitalEntry {
   id: string;
@@ -91,6 +103,18 @@ export const patientStore = {
   setHome(id: string, home: HomeData) { set(state.map((x) => (x.id === id ? { ...x, home } : x))); },
   setTasks(id: string, tasksDone: Record<string, boolean>) { set(state.map((x) => (x.id === id ? { ...x, tasksDone } : x))); },
   setDischarge(id: string, answers: Record<string, string>) { set(state.map((x) => (x.id === id ? { ...x, discharge: answers } : x))); },
+  /** Adds a report; skips duplicates (same symptoms+tier still unresolved within 30 min). Returns false if duplicate. */
+  addSymptomReport(r: SymptomReport) {
+    const p = state.find((x) => x.id === r.patientId); if (!p) return false;
+    const key = [...r.symptoms].sort().join("|") + r.tier;
+    const dup = (p.symptomReports ?? []).some((x) => !x.resolved && [...x.symptoms].sort().join("|") + x.tier === key && Date.parse(r.at) - Date.parse(x.at) < 30 * 60000);
+    if (dup) return false;
+    set(state.map((x) => (x.id === r.patientId ? { ...x, symptomReports: [...(x.symptomReports ?? []), r] } : x)));
+    return true;
+  },
+  resolveReport(pid: string, rid: string, by: string) {
+    set(state.map((x) => (x.id === pid ? { ...x, symptomReports: (x.symptomReports ?? []).map((r) => (r.id === rid ? { ...r, resolved: { at: new Date().toISOString(), by } } : r)) } : x)));
+  },
 };
 export const newId = () => Math.random().toString(36).slice(2, 9);
 export const emptyPatient = (): ManagedPatient => ({ id: newId(), name: "", mrn: "", ward: "", room: "", phone: "", email: "", followUp: "", notes: "", meds: [], discharge: {} });

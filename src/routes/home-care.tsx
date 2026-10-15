@@ -5,6 +5,7 @@ import { Shell } from "@/components/Shell";
 import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
 import { useRole } from "@/lib/role-store";
 import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult } from "@/lib/vitals-engine";
+import { classifySymptoms, tierMeta } from "@/lib/symptoms-engine";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -56,6 +57,32 @@ function HomeCare() {
       {readOnly && <p className="mt-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">👁️ عرض للقراءة فقط — هذه البيانات أدخلها المريض بنفسه.</p>}
       {patient && <Body key={patient.id} patient={patient} readOnly={readOnly} />}
     </Shell>
+  );
+}
+
+type Advice = ReturnType<typeof classifySymptoms>;
+function AdviceCard({ a }: { a: Advice }) {
+  const m = tierMeta[a.tier];
+  return (
+    <div className={`mt-3 rounded-2xl p-4 ${m.cls}`} role="alert">
+      <p className="text-lg font-bold">{m.icon} {m.label}</p>
+      {a.tier === "EMERGENCY" && (
+        <a href="tel:997" className="btn mt-3 block w-full bg-card py-4 text-center text-lg font-bold text-destructive">📞 اتصل بالإسعاف 997</a>
+      )}
+      {a.tier === "EMERGENCY" && <p className="mt-1 text-xs">الضغط على الزر يفتح الاتصال من جهازك — لا يتم الاتصال تلقائيًا.</p>}
+      {a.tier !== "HOME" && <p className="mt-2 text-sm font-semibold">تم إرسال تنبيه للكادر التمريضي المسؤول.</p>}
+      <div className="mt-3 space-y-3">
+        {a.items.map((i) => (
+          <div key={i.name} className="rounded-xl bg-card p-3 text-sm text-foreground">
+            <p className="font-bold">{i.name}</p>
+            <p className="mt-1 font-semibold">ماذا أفعل الآن:</p><ul className="list-inside list-disc">{i.now.map((x) => <li key={x}>{x}</li>)}</ul>
+            <p className="mt-1 font-semibold">ما يجب تجنبه:</p><ul className="list-inside list-disc">{i.avoid.map((x) => <li key={x}>{x}</li>)}</ul>
+            <p className="mt-1"><b>متى أتواصل:</b> {i.when}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs opacity-90">هذه إرشادات عامة وليست تشخيصًا، ولا تغيّر أدويتك دون طبيبك.</p>
+    </div>
   );
 }
 
@@ -163,6 +190,13 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
     severeSideEffect: severe?.severe,
   });
   const painColor = (n: number) => (n <= 3 ? "bg-success text-success-foreground" : n <= 6 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground");
+  const [advice, setAdvice] = useState<Advice | null>(null);
+  const confirmSym = () => {
+    const c = classifySymptoms(sym.map((n) => { const x = customSyms.find((y) => y.name === n); return { name: n, sev: x?.sev ? Number(x.sev) : undefined }; }), risk.score);
+    setAdvice(c); // show advice immediately — never wait on saving
+    patientStore.addSymptomReport({ id: newId(), patientId: patient.id, at: new Date().toISOString(), symptoms: [...sym], tier: c.tier, critical: c.critical, score: risk.score,
+      advice: c.items.map((i) => ({ name: i.name, now: i.now, avoid: i.avoid, when: i.when })) });
+  };
 
   return (
     <ReadCtx.Provider value={readAloud}>

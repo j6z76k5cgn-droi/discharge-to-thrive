@@ -111,7 +111,6 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
     if (sys && dia && s1 > 0 && d1 > 0) { const r = classifyBP(s1, d1); out.push(r); patientStore.addVital(patient.id, { id: newId(), at, kind: "bp", sys: s1, dia: d1, level: r.level, label: r.label, by }); }
     if (!out.length) { alert("أدخل قراءة السكر أو الرقمين الأعلى والأسفل للضغط"); return; }
     setVRes(out); setGVal(""); setSys(""); setDia("");
-    speak(out.map((r) => r.title + ". " + r.advice.join(" ")).join(" "));
   };
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -379,7 +378,11 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
             </div>
             <button onClick={addSym} className="btn mt-2 w-full bg-primary px-3 py-1.5 text-sm text-primary-foreground">+ إضافة العرض</button>
           </div>
-          {sym.length > 0 && <p className="mt-3 text-xs text-destructive">سيتم إشعار الممرض المتابع بهذه الأعراض.</p>}
+          {sym.length > 0 && !readOnly && (
+            <button onClick={confirmSym} className="btn mt-3 w-full bg-primary py-3 text-primary-foreground">✅ تأكيد الأعراض وعرض النصيحة</button>
+          )}
+          {advice && <AdviceCard a={advice} />}
+          {readOnly && (patient.symptomReports?.length ?? 0) > 0 && <p className="mt-3 text-xs text-muted-foreground">آخر تقرير أعراض: {tierMeta[patient.symptomReports!.at(-1)!.tier].label}</p>}
         </section>
 
         <section className="card-surface p-5">

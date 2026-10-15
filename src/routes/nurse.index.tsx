@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell } from "@/components/Shell";
+import { NurseAlerts } from "@/components/NurseAlerts";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
 
 export const Route = createFileRoute("/nurse/")({
@@ -20,6 +21,7 @@ function Nurse() {
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">مرضاي بعد الخروج</h1>
+      <NurseAlerts />
       <section className="card-surface mt-6 p-5">
         <h2 className="mb-3 font-bold text-destructive">🚨 تنبيهات الالتزام الدوائي</h2>
         <div className="grid gap-2 md:grid-cols-2">

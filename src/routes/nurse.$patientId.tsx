@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
+import { NurseAlerts, SymptomHistory } from "@/components/NurseAlerts";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
 import { riskLevelMeta } from "@/lib/risk-engine";
 
@@ -56,6 +57,8 @@ function PatientPage() {
         </div>
         <span className={`rounded-full px-4 py-1.5 font-semibold ${statusMeta[a.status].cls}`}>{statusMeta[a.status].label}</span>
       </div>
+      <NurseAlerts name={p.name} />
+      <SymptomHistory name={p.name} />
 
       {a.status === "urgent" && (
         <div className="mt-5 rounded-2xl bg-destructive p-5 text-destructive-foreground">

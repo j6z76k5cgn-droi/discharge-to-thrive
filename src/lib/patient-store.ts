@@ -7,6 +7,7 @@ export interface MedPlan {
   times: string[];
   windowMin: number; // ± adherence window
   missedAfterMin: number; // missed dose threshold
+  knownEffects?: string; // أعراض جانبية معروفة (من معلومات الدواء المعتمدة) يدخلها الممرض
 }
 export interface ManagedPatient {
   id: string;
@@ -25,7 +26,13 @@ export interface ManagedPatient {
   home?: HomeData;
   tasksDone?: Record<string, boolean>;
   symptomReports?: SymptomReport[];
+  bedbound?: boolean;
+  turning?: TurningPlan;
+  turnLog?: Record<string, TurnDone>; // "YYYY-MM-DD|slotId" -> done
+  sideEffects?: SideEffectReport[];
+  seRedFlags?: string[]; // علامات خطر إضافية يحددها الممرض
 }
+import type { TurningPlan, TurnDone, SideEffectReport } from "./care-engine";
 export interface SymptomReport {
   id: string;
   patientId: string;
@@ -111,6 +118,12 @@ export const patientStore = {
     if (dup) return false;
     set(state.map((x) => (x.id === r.patientId ? { ...x, symptomReports: [...(x.symptomReports ?? []), r] } : x)));
     return true;
+  },
+  patch(id: string, fn: (p: ManagedPatient) => ManagedPatient) { set(state.map((x) => (x.id === id ? fn(x) : x))); },
+  markTurn(id: string, key: string, by: string) { this.patch(id, (p) => ({ ...p, turnLog: { ...(p.turnLog ?? {}), [key]: { at: new Date().toISOString(), by } } })); },
+  addSideEffect(r: SideEffectReport) { this.patch(r.patientId, (p) => ({ ...p, sideEffects: [...(p.sideEffects ?? []), r] })); },
+  updateSideEffect(pid: string, rid: string, status: SideEffectReport["status"], action?: { by: string; text: string }) {
+    this.patch(pid, (p) => ({ ...p, sideEffects: (p.sideEffects ?? []).map((r) => (r.id === rid ? { ...r, status, actions: action ? [...(r.actions ?? []), { ...action, at: new Date().toISOString() }] : r.actions } : r)) }));
   },
   resolveReport(pid: string, rid: string, by: string) {
     set(state.map((x) => (x.id === pid ? { ...x, symptomReports: (x.symptomReports ?? []).map((r) => (r.id === rid ? { ...r, resolved: { at: new Date().toISOString(), by } } : r)) } : x)));

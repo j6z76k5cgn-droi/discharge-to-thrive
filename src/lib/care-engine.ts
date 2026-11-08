@@ -45,7 +45,7 @@ export const emptyTurningPlan = (): TurningPlan => ({ version: 0, slots: [], pos
 export const isPlanActive = (p?: TurningPlan) => !!p?.approved && p.slots.length > 0;
 
 export type SlotStatus = "DONE" | "DUE" | "OVERDUE" | "UPCOMING";
-const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 export const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
 export function slotStatus(slot: TurnSlot, done: TurnDone | undefined, now: Date, graceMin: number): SlotStatus {
@@ -80,7 +80,7 @@ export interface SideEffectReport {
   symptom: string; doseAt: string; onsetAt: string; severity: SeSeverity; repeated: boolean; note: string;
   at: string; by: string; tier: SeTier;
   status: "NEW" | "REVIEW" | "DONE";
-  actions?: { at: string; by: string; text: string }[];
+  actions?: { at: string; by: string; text: string }[] | undefined;
 }
 
 /** تصنيف قابل للتخصيص: redFlags من خطة المريض تُضاف إلى الافتراضية. لا يحكم على سببية الدواء. */

@@ -6,6 +6,7 @@ import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/pat
 import { useRole } from "@/lib/role-store";
 import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult } from "@/lib/vitals-engine";
 import { classifySymptoms, tierMeta } from "@/lib/symptoms-engine";
+import { CaregiverTurning, SideEffectForm } from "@/components/CarePanels";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -228,13 +229,11 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
         )}
       </section>
 
-      {risk.critical && (
-        <div className="mt-4 rounded-2xl bg-destructive p-5 text-destructive-foreground">
-          <p className="font-bold">🚨 تم رصد علامة تستدعي تقييمًا عاجلًا</p>
-          <p className="mt-1 text-sm">تم إشعار الكادر التمريضي المسؤول وفق بروتوكول المنشأة.</p>
-        </div>
-      )}
 
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <CaregiverTurning patient={patient} readOnly={readOnly} />
+        <SideEffectForm patient={patient} readOnly={readOnly} />
+      </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <section className="card-surface p-5 md:col-span-2">
           <h2 className="mb-1 font-bold text-primary">💊 دليل العلاج وتتبع الجرعات<Say t={`دليل العلاج. أدويتك: ${meds.map((m) => `${m.n} في الأوقات ${m.times.join(" و ")}`).join("، ")}. اضغط أخذت الدواء بعد كل جرعة.`} /></h2>

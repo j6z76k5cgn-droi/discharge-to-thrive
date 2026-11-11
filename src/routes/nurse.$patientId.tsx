@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
 import { NurseAlerts, SymptomHistory } from "@/components/NurseAlerts";
+import { NurseCarePanel } from "@/components/CarePanels";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
 import { riskLevelMeta } from "@/lib/risk-engine";
 
@@ -59,6 +60,7 @@ function PatientPage() {
       </div>
       <NurseAlerts name={p.name} />
       <SymptomHistory name={p.name} />
+      <NurseCarePanel name={p.name} />
 
       {a.status === "urgent" && (
         <div className="mt-5 rounded-2xl bg-destructive p-5 text-destructive-foreground">

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { forbiddenFromText } from "@/lib/care-inputs";
 import { newId, patientStore, usePatients, type ManagedPatient } from "@/lib/patient-store";
 import {
   classifySideEffect, dayKey, emptyTurningPlan, isPlanActive, SE_SYMPTOMS, SE_TIER_UI, SFDA_URL, SKIN_TIPS, slotStatus, STOP_SIGNS, turnSummary,
@@ -61,8 +63,7 @@ export function CaregiverTurning({ patient, readOnly }: { patient: ManagedPatien
 }
 
 /* ── نموذج الأثر الجانبي ── */
-export function SideEffectForm({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolean }) {
-  const [medId, setMedId] = useState(patient.meds[0]?.id ?? "");
+export function SideEffectForm({ patient, readOnly, medId, onReported }: { patient: ManagedPatient; readOnly: boolean; medId: string; onReported?: (report: SideEffectReport) => void }) {
   const [symptom, setSymptom] = useState("");
   const [custom, setCustom] = useState("");
   const [doseAt, setDoseAt] = useState("");
@@ -77,15 +78,15 @@ export function SideEffectForm({ patient, readOnly }: { patient: ManagedPatient;
     if (!sym) return;
     const tier = classifySideEffect({ symptom: sym, severity, repeated });
     const r: SideEffectReport = { id: newId(), patientId: patient.id, medId, medName: med?.name ?? "غير محدد", symptom: sym, doseAt, onsetAt, severity, repeated, note: "", at: new Date().toISOString(), by: "المريض/المرافق", tier, status: "NEW" };
-    patientStore.addSideEffect(r); setResult(r);
+    patientStore.addSideEffect(r); setResult(r); onReported?.(r);
   };
   const ui = result ? SE_TIER_UI[result.tier] : null;
   return (
-    <section className="card-surface p-5 md:col-span-2">
+    <div className="mt-4 border-t pt-4" aria-label="الإبلاغ عن أثر جانبي">
       <h2 className="mb-1 font-bold text-primary">💊 الإبلاغ عن أثر جانبي</h2>
       <p className="mb-3 text-xs text-muted-foreground">التسجيل لا يعني أن الدواء هو السبب — الفريق الصحي يقيّم ذلك. لا توقف الدواء أو تغيّر الجرعة من نفسك.</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm">الدواء<select value={medId} onChange={(e) => setMedId(e.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2">{patient.meds.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        <label className="min-w-0 text-sm">الدواء<input value={patient.meds.find((m) => m.id === medId)?.name ?? ""} readOnly dir="ltr" className="mt-1 w-full rounded-lg border bg-muted p-2" /></label>
         <label className="text-sm">العرض<select value={symptom} onChange={(e) => setSymptom(e.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2">
           <option value="">— اختر —</option>
           <optgroup label="علامات خطر">{["صعوبة في التنفس", "تورم الشفاه أو اللسان أو الحلق", "صعوبة في البلع", "طفح جلدي سريع الانتشار", "إغماء أو دوار شديد"].map((x) => <option key={x}>{x}</option>)}</optgroup>
@@ -94,10 +95,10 @@ export function SideEffectForm({ patient, readOnly }: { patient: ManagedPatient;
         {symptom === "أخرى" && <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="اكتب العرض" className="rounded-lg border bg-background p-2 text-sm sm:col-span-2" />}
         <label className="text-sm">وقت أخذ الجرعة<input type="time" value={doseAt} onChange={(e) => setDoseAt(e.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
         <label className="text-sm">وقت ظهور العرض<input type="time" value={onsetAt} onChange={(e) => setOnsetAt(e.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
-        <div className="text-sm">الشدة<div className="mt-1 flex gap-2">{(["خفيف", "متوسط", "شديد"] as SeSeverity[]).map((s) => <button key={s} type="button" onClick={() => setSeverity(s)} className={`btn flex-1 ${severity === s ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{s}</button>)}</div></div>
+        <div className="text-sm">الشدة<div className="mt-1 flex gap-2">{(["خفيف", "متوسط", "شديد"] as SeSeverity[]).map((s) => <Button key={s} type="button" onClick={() => setSeverity(s)} variant={severity === s ? "default" : "secondary"} className="flex-1">{s}</Button>)}</div></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={repeated} onChange={(e) => setRepeated(e.target.checked)} className="h-5 w-5 accent-primary" />تكرر العرض أكثر من مرة</label>
       </div>
-      <button onClick={submit} disabled={!sym} className="btn mt-4 w-full bg-primary py-3 text-primary-foreground disabled:opacity-50">📤 إرسال البلاغ</button>
+      <Button onClick={submit} disabled={!sym} className="mt-4 h-auto w-full whitespace-normal py-3">📤 إرسال البلاغ</Button>
       {result && ui && (
         <div className={`mt-4 rounded-2xl border-2 p-4 ${ui.cls}`} role="alert">
           <p className="font-bold">{ui.label}</p>
@@ -106,7 +107,7 @@ export function SideEffectForm({ patient, readOnly }: { patient: ManagedPatient;
           <a href={SFDA_URL} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary underline">🔗 الإبلاغ للهيئة العامة للغذاء والدواء</a>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -143,7 +144,7 @@ export function NurseCarePanel({ name }: { name: string }) {
           ))}
           <button onClick={() => edit((x) => { x.slots.push({ id: newId(), time: "08:00", positionId: x.positions[0]!.id }); x.slots.sort((a, b) => a.time.localeCompare(b.time)); return x; })} className="btn bg-secondary text-sm text-secondary-foreground">+ إضافة موعد</button>
         </div>
-        <label className="mt-3 block text-sm">وضعيات ممنوعة (افصل بفاصلة)<input value={plan.forbidden.join("، ")} onChange={(e) => edit((x) => { x.forbidden = e.target.value.split(/[،,]/).map((t) => t.trim()).filter(Boolean); return x; })} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+        <label className="mt-3 block text-sm">وضعيات ممنوعة<textarea value={plan.forbidden.join("، ")} onChange={(e) => edit((x) => { x.forbidden = forbiddenFromText(e.target.value); return x; })} rows={2} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
         <label className="mt-2 block text-sm">تعليمات للمرافق (زوايا الإمالة، نصف الجلوس...)<textarea value={plan.notes} onChange={(e) => edit((x) => { x.notes = e.target.value; return x; })} rows={2} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
         <label className="mt-2 block text-sm">يُعتبر متأخرًا بعد (دقيقة)<input type="number" value={plan.graceMin} onChange={(e) => edit((x) => { x.graceMin = Number(e.target.value) || 0; return x; })} className="mt-1 w-24 rounded-lg border bg-background p-2" /></label>
         <button onClick={approve} disabled={plan.slots.length === 0} className="btn mt-3 w-full bg-primary text-primary-foreground disabled:opacity-50">✓ اعتماد الخطة وتفعيلها للمرافق</button>

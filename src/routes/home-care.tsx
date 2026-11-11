@@ -7,6 +7,7 @@ import { useRole } from "@/lib/role-store";
 import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult } from "@/lib/vitals-engine";
 import { classifySymptoms, tierMeta } from "@/lib/symptoms-engine";
 import { CaregiverTurning, SideEffectForm } from "@/components/CarePanels";
+import { shouldShowSideEffectForm } from "@/lib/care-inputs";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -15,6 +16,8 @@ export const Route = createFileRoute("/home-care")({
       { name: "description", content: "تطبيق المريض اليومي: الأدوية، الألم، الأعراض، والمساعد الصوتي." },
       { property: "og:title", content: "المتابعة المنزلية | مِداد" },
       { property: "og:description", content: "مهام يومية لتعافٍ آمن في المنزل." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: HomeCare,
@@ -95,7 +98,7 @@ function Say({ t }: { t: string }) {
 
 function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolean }) {
   const h = patient.home;
-  const meds = (patient?.meds ?? []).map((m) => ({ rx: `${patient!.id}-${m.id}`, n: m.name, d: m.route, times: m.times, win: m.windowMin, grace: m.missedAfterMin }));
+  const meds = patient.meds.map((m) => ({ id: m.id, rx: `${patient.id}-${m.id}`, n: m.name, d: m.route, times: m.times, win: m.windowMin, grace: m.missedAfterMin }));
   const [doses, setDoses] = useState<Record<string, Dose>>(h?.doses ?? {});
   const [now, setNow] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STANDARD");
@@ -232,7 +235,6 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <CaregiverTurning patient={patient} readOnly={readOnly} />
-        <SideEffectForm patient={patient} readOnly={readOnly} />
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <section className="card-surface p-5 md:col-span-2">
@@ -279,12 +281,13 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
                               </select>
                             </div>
                           )}
-                          {d?.status === "MISSED" && d.reason === "ظهرت أعراض جانبية" && !d.severe && (
-                            <div className="mt-2 flex gap-2 text-xs">
-                              <span>شدة الأعراض؟</span>
-                              <button onClick={() => setDoses({ ...doses, [k]: { ...d, reason: "أعراض جانبية خفيفة" } })} className="btn bg-muted px-2 py-0.5">خفيفة</button>
-                              <button onClick={() => setDoses({ ...doses, [k]: { ...d, severe: `${m.n} ${t}` } })} className="btn bg-destructive px-2 py-0.5 text-destructive-foreground">حادة 🚨</button>
-                            </div>
+                          {shouldShowSideEffectForm(d, readOnly) && (
+                            <SideEffectForm patient={patient} readOnly={readOnly} medId={m.id}
+                              onReported={(report) => setDoses((prev) => {
+                                const dose = prev[k];
+                                if (dose?.status !== "MISSED") return prev;
+                                return { ...prev, [k]: { ...dose, severe: report.severity === "شديد" ? `${m.n} ${t}` : undefined } };
+                              })} />
                           )}
                         </div>
                       );

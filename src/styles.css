@@ -74,6 +74,7 @@
 }
 
 @utility bg-ink-gradient { background: var(--gradient-ink); }
+@utility font-sans-en { font-family: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif; }
 @utility font-display { font-family: var(--font-display); }
 @utility card-surface {
   background: var(--color-card);

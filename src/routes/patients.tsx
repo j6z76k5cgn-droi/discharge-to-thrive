@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
+import { TurningPlanEditor } from "@/components/CarePanels";
 import { emptyPatient, newId, patientStore, usePatients, type ManagedPatient, type MedPlan } from "@/lib/patient-store";
 
 export const Route = createFileRoute("/patients")({
@@ -90,6 +91,8 @@ function Patients() {
           </div>
         ))}
       </section>
+
+      {isNew ? <TurningPlanEditor patientId="" /> : <TurningPlanEditor patientId={edit.id} />}
 
       {msg && <p className="mt-3 text-sm text-destructive">{msg}</p>}
       <div className="mt-5 flex flex-wrap gap-2">

@@ -26,7 +26,7 @@ export const SKIN_TIPS = [
 ];
 export const STOP_SIGNS = ["ألم شديد مفاجئ أثناء التقليب", "صعوبة في التنفس", "تغيّر في الوعي أو الدوخة الشديدة", "نزيف أو انفتاح جرح"];
 
-export interface TurnSlot { id: string; time: string; positionId: string }
+export interface TurnSlot { id: string; time: string; positionId: string; note?: string }
 export interface TurningPlan {
   version: number;
   slots: TurnSlot[];

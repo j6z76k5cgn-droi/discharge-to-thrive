@@ -151,9 +151,16 @@ function Discharge() {
         </div>
         <aside className="card-surface h-fit p-6 text-center lg:sticky lg:top-20">
           <p className="text-sm text-muted-foreground">درجة جاهزية الخروج</p>
-          <p className={`font-display mt-2 text-6xl ${level.c}`}>{score}%</p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-            <div className={`h-full transition-all ${level.b}`} style={{ width: `${score}%` }} />
+          <div className="relative mx-auto mt-3 h-44 w-44">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+              <circle cx="60" cy="60" r="52" fill="none" strokeWidth="10" className="stroke-muted" />
+              <circle cx="60" cy="60" r="52" fill="none" strokeWidth="2" strokeDasharray="2 324.7" strokeDashoffset={-0.9 * 326.7} className="stroke-foreground" />
+              <circle cx="60" cy="60" r="52" fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(score / 100) * 326.7} 326.7`} className={`transition-all duration-700 ${level.c.replace("text-", "stroke-")}`} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`font-display text-5xl ${level.c}`}>{score}%</span>
+              <span className="text-xs text-muted-foreground">الحد 90%</span>
+            </div>
           </div>
           <p className={`mt-3 text-sm font-semibold ${level.c}`}>{level.l}</p>
           <p className="mt-3 text-xs font-semibold">اكتمال القائمة {completion}%</p>

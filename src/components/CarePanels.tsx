@@ -39,6 +39,7 @@ export function CaregiverTurning({ patient, readOnly }: { patient: ManagedPatien
                 onChange={() => patientStore.markTurn(patient.id, `${dk}|${s.id}`, "المرافق")} />
               <span className="flex-1">
                 <b className="block">{s.time} — {p?.icon} {p?.name ?? "وضعية"}</b>
+                {s.note && <span className="block text-xs whitespace-pre-wrap">📝 {s.note}</span>}
                 <span className="text-xs">{stUI[st].l}{done ? ` الساعة ${fmt(done.at)}` : ""}</span>
               </span>
             </label>
@@ -111,44 +112,96 @@ export function SideEffectForm({ patient, readOnly, medId, onReported }: { patie
   );
 }
 
-/* ── لوحة الممرض: إعداد واعتماد خطة التقليب + الالتزام + بلاغات الأعراض الجانبية ── */
-export function NurseCarePanel({ name }: { name: string }) {
+/* ── إدارة المريض: خطة ومواعيد التقليب والوضعيات (بنفس أسلوب الأدوية) ── */
+export function TurningPlanEditor({ patientId }: { patientId: string }) {
   const list = usePatients();
-  const p = list.find((x) => x.name === name);
+  const p = list.find((x) => x.id === patientId);
   const [draft, setDraft] = useState<TurningPlan | null>(null);
-  const now = useNow();
-  if (!p) return null;
+  const [slot, setSlot] = useState<{ id: string; time: string; positionId: string; note: string } | null>(null);
+  if (!p) return <section className="card-surface mt-4 p-5"><h2 className="font-bold text-primary">🔄 خطة ومواعيد التقليب والوضعيات</h2><p className="mt-2 text-sm text-muted-foreground">احفظ بيانات المريض أولًا ثم أضف خطة التقليب.</p></section>;
   const plan = draft ?? p.turning ?? emptyTurningPlan();
   const edit = (f: (x: TurningPlan) => TurningPlan) => setDraft(f(structuredClone(plan)));
+  const posName = (id: string) => plan.positions.find((q) => q.id === id);
+  const saveSlot = () => {
+    if (!slot || !slot.time) return;
+    edit((x) => { const i = x.slots.findIndex((s) => s.id === slot.id); const v = { ...slot, note: slot.note }; if (i >= 0) x.slots[i] = v; else x.slots.push(v); x.slots.sort((a, b) => a.time.localeCompare(b.time)); return x; });
+    setSlot(null);
+  };
   const approve = () => {
     const v = (p.turning?.version ?? 0) + 1; const at = new Date().toISOString();
     const next: TurningPlan = { ...plan, version: v, approved: { by: "الممرض المسؤول", at }, history: [...(plan.history ?? []), { version: v, at, by: "الممرض المسؤول", summary: `${plan.slots.length} مواعيد` }] };
     patientStore.patch(p.id, (x) => ({ ...x, turning: next })); setDraft(null);
   };
+  const inp = "w-full rounded-lg border bg-background p-2 text-sm";
+  return (
+    <section className="card-surface mt-4 p-5">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold text-primary">🔄 خطة ومواعيد التقليب والوضعيات</h2>
+        <button onClick={() => setSlot({ id: newId(), time: "08:00", positionId: plan.positions[0]!.id, note: "" })} className="btn bg-primary px-3 py-1.5 text-sm text-primary-foreground">+ إضافة موعد تقليب</button>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">{p.turning?.approved ? `معتمدة — الإصدار ${p.turning.version}` : "غير معتمدة — لا تظهر للمرافق"}{draft ? " · توجد تعديلات غير معتمدة" : ""}</p>
+      {plan.slots.length === 0 && <p className="text-sm text-muted-foreground">لا توجد مواعيد تقليب بعد. يحدد الممرض الجدول حسب تقييم المريض.</p>}
+      {plan.slots.map((s) => (
+        <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-3 text-sm first:border-0">
+          <div>
+            <p className="font-semibold"><span dir="ltr">{s.time}</span> — {posName(s.positionId)?.icon} {posName(s.positionId)?.name ?? "وضعية"}</p>
+            {s.note && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{s.note}</p>}
+          </div>
+          <div className="flex gap-2 text-xs">
+            <button onClick={() => setSlot({ ...s, note: s.note ?? "" })} className="text-primary">تعديل</button>
+            <button onClick={() => edit((x) => { x.slots = x.slots.filter((y) => y.id !== s.id); return x; })} className="text-destructive">حذف</button>
+          </div>
+        </div>
+      ))}
+      <label className="mt-3 block text-sm"><span className="mb-1 block font-semibold">الوضعيات الممنوعة (نص حر)</span><textarea value={plan.forbidden.join("، ")} onChange={(e) => edit((x) => { x.forbidden = forbiddenFromText(e.target.value); return x; })} rows={2} className={inp} /></label>
+      <label className="mt-2 block text-sm"><span className="mb-1 block font-semibold">تعليمات للمرافق (زوايا الإمالة، نصف الجلوس...)</span><textarea value={plan.notes} onChange={(e) => edit((x) => { x.notes = e.target.value; return x; })} rows={2} className={inp} /></label>
+      <label className="mt-2 block text-sm"><span className="mb-1 block font-semibold">يُعتبر متأخرًا بعد (دقيقة)</span><input type="number" min={0} value={plan.graceMin} onChange={(e) => edit((x) => { x.graceMin = Number(e.target.value) || 0; return x; })} className="w-24 rounded-lg border bg-background p-2 text-sm" /></label>
+      <button onClick={approve} disabled={plan.slots.length === 0} className="btn mt-3 w-full bg-primary text-primary-foreground disabled:opacity-50">✓ اعتماد الخطة وتفعيلها للمرافق</button>
+
+      {slot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4" onClick={() => setSlot(null)}>
+          <div dir="rtl" className="card-surface w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 font-bold text-primary">موعد التقليب</h3>
+            <div className="space-y-3 text-sm">
+              <label className="block"><span className="mb-1 block font-semibold">الساعة</span><input type="time" value={slot.time} onChange={(e) => setSlot({ ...slot, time: e.target.value })} className={inp} /></label>
+              <label className="block"><span className="mb-1 block font-semibold">الوضعية المطلوبة</span>
+                <select value={slot.positionId} onChange={(e) => setSlot({ ...slot, positionId: e.target.value })} className={inp}>
+                  {plan.positions.map((q) => <option key={q.id} value={q.id}>{q.icon} {q.name}</option>)}
+                </select></label>
+              <label className="block"><span className="mb-1 block font-semibold">ملاحظات (مثل زاوية نصف الجلوس 30° أو الحماية)</span><textarea rows={2} value={slot.note} onChange={(e) => setSlot({ ...slot, note: e.target.value })} className={inp} /></label>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={saveSlot} disabled={!slot.time} className="btn flex-1 bg-primary text-primary-foreground disabled:opacity-40">حفظ الموعد</button>
+              <button onClick={() => setSlot(null)} className="btn flex-1 bg-muted">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ── لوحة الممرض: متابعة الالتزام + بلاغات الآثار الجانبية (بدون إعداد) ── */
+export function NurseCarePanel({ name }: { name: string }) {
+  const list = usePatients();
+  const p = list.find((x) => x.name === name);
+  const now = useNow();
+  if (!p) return null;
   const sum = now ? turnSummary(p.turning, p.turnLog, now) : null;
+  const pct = sum && sum.total ? Math.round((sum.done / sum.total) * 100) : 0;
   const se = [...(p.sideEffects ?? [])].reverse();
   return (
     <div className="mt-6 grid gap-4 md:grid-cols-2">
       <section className="card-surface p-5">
-        <h2 className="font-bold text-primary">🛏️ خطة التقليب (يحددها الممرض)</h2>
-        <p className="text-xs text-muted-foreground">{p.turning?.approved ? `معتمدة — الإصدار ${p.turning.version}` : "غير معتمدة — لا تظهر للمرافق"}{draft ? " · توجد تعديلات غير معتمدة" : ""}</p>
-        <div className="mt-3 space-y-2">
-          {plan.slots.map((s, i) => (
-            <div key={s.id} className="flex gap-2">
-              <input type="time" value={s.time} onChange={(e) => edit((x) => { x.slots[i]!.time = e.target.value; return x; })} className="rounded-lg border bg-background p-2 text-sm" />
-              <select value={s.positionId} onChange={(e) => edit((x) => { x.slots[i]!.positionId = e.target.value; return x; })} className="flex-1 rounded-lg border bg-background p-2 text-sm">
-                {plan.positions.map((q) => <option key={q.id} value={q.id}>{q.icon} {q.name}</option>)}
-              </select>
-              <button onClick={() => edit((x) => { x.slots.splice(i, 1); return x; })} className="text-sm text-destructive">حذف</button>
-            </div>
-          ))}
-          <button onClick={() => edit((x) => { x.slots.push({ id: newId(), time: "08:00", positionId: x.positions[0]!.id }); x.slots.sort((a, b) => a.time.localeCompare(b.time)); return x; })} className="btn bg-secondary text-sm text-secondary-foreground">+ إضافة موعد</button>
-        </div>
-        <label className="mt-3 block text-sm">وضعيات ممنوعة<textarea value={plan.forbidden.join("، ")} onChange={(e) => edit((x) => { x.forbidden = forbiddenFromText(e.target.value); return x; })} rows={2} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
-        <label className="mt-2 block text-sm">تعليمات للمرافق (زوايا الإمالة، نصف الجلوس...)<textarea value={plan.notes} onChange={(e) => edit((x) => { x.notes = e.target.value; return x; })} rows={2} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
-        <label className="mt-2 block text-sm">يُعتبر متأخرًا بعد (دقيقة)<input type="number" value={plan.graceMin} onChange={(e) => edit((x) => { x.graceMin = Number(e.target.value) || 0; return x; })} className="mt-1 w-24 rounded-lg border bg-background p-2" /></label>
-        <button onClick={approve} disabled={plan.slots.length === 0} className="btn mt-3 w-full bg-primary text-primary-foreground disabled:opacity-50">✓ اعتماد الخطة وتفعيلها للمرافق</button>
-        {sum && sum.total > 0 && <p className="mt-3 rounded-lg bg-secondary p-2 text-sm">التزام اليوم: {sum.done}/{sum.total} منفذ{sum.overdue ? ` · ⚠️ ${sum.overdue} متأخر` : ""}</p>}
+        <h2 className="font-bold text-primary">🛏️ التزام المرافق بجدول التقليب</h2>
+        <p className="text-xs text-muted-foreground">{p.turning?.approved ? `الخطة معتمدة — الإصدار ${p.turning.version} · تُعدّل من صفحة إدارة المرضى` : "لا توجد خطة معتمدة — تُعدّ من صفحة إدارة المرضى"}</p>
+        {sum && sum.total > 0 ? (
+          <>
+            <p className="font-display mt-3 text-4xl text-ink">{pct}%</p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} /></div>
+            <p className="mt-2 text-sm">منفذ اليوم: {sum.done}/{sum.total}{sum.overdue ? ` · ⚠️ ${sum.overdue} متأخر` : ""}</p>
+          </>
+        ) : <p className="mt-2 text-sm text-muted-foreground">لا توجد مواعيد لليوم.</p>}
       </section>
       <section className="card-surface p-5">
         <h2 className="font-bold text-primary">💊 بلاغات الآثار الجانبية</h2>

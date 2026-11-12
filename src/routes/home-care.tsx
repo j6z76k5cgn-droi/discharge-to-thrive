@@ -286,7 +286,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
                               onReported={(report) => setDoses((prev) => {
                                 const dose = prev[k];
                                 if (dose?.status !== "MISSED") return prev;
-                                return { ...prev, [k]: { ...dose, severe: report.severity === "شديد" ? `${m.n} ${t}` : undefined } };
+                                const { severe: _s, ...rest } = dose; return { ...prev, [k]: report.severity === "شديد" ? { ...rest, severe: `${m.n} ${t}` } : rest };
                               })} />
                           )}
                         </div>

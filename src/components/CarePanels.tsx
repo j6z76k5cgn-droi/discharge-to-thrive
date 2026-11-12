@@ -39,6 +39,7 @@ export function CaregiverTurning({ patient, readOnly }: { patient: ManagedPatien
                 onChange={() => patientStore.markTurn(patient.id, `${dk}|${s.id}`, "المرافق")} />
               <span className="flex-1">
                 <b className="block">{s.time} — {p?.icon} {p?.name ?? "وضعية"}</b>
+                {s.note && <span className="block text-xs whitespace-pre-wrap">📝 {s.note}</span>}
                 <span className="text-xs">{stUI[st].l}{done ? ` الساعة ${fmt(done.at)}` : ""}</span>
               </span>
             </label>

@@ -58,6 +58,7 @@ function HomeCare() {
           {patient && <span className="text-xs text-muted-foreground">{patient.ward} · غرفة {patient.room}{patient.home?.updatedAt ? ` · آخر تحديث ${new Date(patient.home.updatedAt).toLocaleString("ar-SA")}` : ""}</span>}
         </div>
       )}
+      {!readOnly && patient && <RecoveryWelcome name={patient.name} meds={patient.meds.length} turning={!!patient.turning?.approved} />}
       {readOnly && <p className="mt-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">👁️ عرض للقراءة فقط — هذه البيانات أدخلها المريض بنفسه.</p>}
       {patient && <Body key={patient.id} patient={patient} readOnly={readOnly} />}
     </Shell>
@@ -448,5 +449,26 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
       </div>
     </fieldset>
     </ReadCtx.Provider>
+  );
+}
+
+function RecoveryWelcome({ name, meds, turning }: { name: string; meds: number; turning: boolean }) {
+  const steps = ["الخروج من المستشفى", "الأيام الأولى في المنزل", "استقرار الحالة", "التعافي"];
+  const cur = 1;
+  return (
+    <section className="bg-ink-gradient mt-3 rounded-2xl p-5 text-primary-foreground">
+      <p className="text-sm opacity-90">أهلًا {name.split(" ")[0]} 🌿</p>
+      <p className="font-display mt-1 text-2xl">كل خطوة اليوم تقرّبك من التعافي</p>
+      <p className="mt-1 text-sm opacity-90">مهام اليوم: {meds} أدوية{turning ? " · جدول التقليب" : ""} · تسجيل الألم والأعراض</p>
+      <ol className="mt-4 grid grid-cols-4 gap-1 text-center text-xs">
+        {steps.map((s, i) => (
+          <li key={s}>
+            <span className={`mx-auto mb-1 block h-2 rounded-full ${i <= cur ? "bg-primary-foreground" : "bg-primary-foreground/30"}`} />
+            <span className={i === cur ? "font-bold" : "opacity-80"}>{s}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs opacity-80">مراحل الرحلة توضيحية؛ يحدد الفريق الصحي تقدّمك الفعلي. للحالات الطارئة اتصل 997.</p>
+    </section>
   );
 }

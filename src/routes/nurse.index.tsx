@@ -21,6 +21,31 @@ function Nurse() {
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">مرضاي بعد الخروج</h1>
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { l: "إجمالي المرضى", v: rows.length, c: "text-ink" },
+          { l: "حالات عاجلة", v: rows.filter((r) => r.a.status === "urgent").length, c: "text-destructive" },
+          { l: "تحتاج متابعة", v: rows.filter((r) => r.a.status === "follow").length, c: "text-warning-foreground" },
+          { l: "متوسط الالتزام الدوائي", v: `${rows.length ? Math.round(rows.reduce((t, r) => t + r.a.adherence, 0) / rows.length) : 0}%`, c: "text-primary" },
+        ].map((k) => (
+          <div key={k.l} className="card-surface p-4">
+            <p className="text-xs text-muted-foreground">{k.l}</p>
+            <p className={`font-display mt-1 text-3xl ${k.c}`}>{k.v}</p>
+          </div>
+        ))}
+      </div>
+      <div className="card-surface mt-3 p-4">
+        <p className="mb-2 text-xs text-muted-foreground">درجة الخطورة لكل مريض</p>
+        <div className="space-y-2">
+          {rows.map(({ p, a }) => (
+            <div key={p.id} className="flex items-center gap-2 text-xs">
+              <span className="w-28 truncate font-semibold">{p.name}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted"><div className={`h-full ${a.status === "urgent" ? "bg-destructive" : a.status === "follow" ? "bg-warning" : "bg-primary"}`} style={{ width: `${a.risk.score}%` }} /></div>
+              <span className="w-10 text-left">{a.risk.score}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <NurseAlerts />
       <section className="card-surface mt-6 p-5">
         <h2 className="mb-3 font-bold text-destructive">🚨 تنبيهات الالتزام الدوائي</h2>

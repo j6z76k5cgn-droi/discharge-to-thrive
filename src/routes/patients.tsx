@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
 import { TurningPlanEditor } from "@/components/CarePanels";
+import { SERVICES } from "@/lib/services-guide";
 import { emptyPatient, newId, patientStore, usePatients, type ManagedPatient, type MedPlan } from "@/lib/patient-store";
 
 export const Route = createFileRoute("/patients")({
@@ -90,6 +91,34 @@ function Patients() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="card-surface mt-4 p-5">
+        <h2 className="mb-1 font-bold text-primary">📊 القياسات المطلوبة في المنزل</h2>
+        <p className="mb-3 text-xs text-muted-foreground">تظهر للمريض فقط القياسات التي يحددها الممرض هنا.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {([["glucose", "🩸 قياس السكر"], ["bp", "💓 قياس الضغط"]] as const).map(([k, l]) => (
+            <label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
+              <input type="checkbox" checked={!!edit.measures?.[k]} onChange={(e) => setEdit({ ...edit, measures: { ...edit.measures, [k]: e.target.checked } })} className="h-5 w-5 accent-primary" />
+              {l}
+            </label>
+          ))}
+        </div>
+        <label className="mt-3 block text-sm"><span className="mb-1 block font-semibold">تعليمات القياس (التوقيت/عدد المرات)</span>
+          <textarea rows={2} value={edit.measures?.note ?? ""} onChange={(e) => setEdit({ ...edit, measures: { ...edit.measures, note: e.target.value } })} className={inp} /></label>
+      </section>
+
+      <section className="card-surface mt-4 p-5">
+        <h2 className="mb-1 font-bold text-primary">🧭 خدمات يحتاجها بعد الخروج</h2>
+        <p className="mb-3 text-xs text-muted-foreground">تظهر كاقتراح للأسرة في مرشد الخدمات.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {SERVICES.map((sv) => (
+            <label key={sv.id} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
+              <input type="checkbox" checked={!!edit.services?.includes(sv.id)} onChange={(e) => setEdit({ ...edit, services: e.target.checked ? [...(edit.services ?? []), sv.id] : (edit.services ?? []).filter((x) => x !== sv.id) })} className="h-5 w-5 accent-primary" />
+              {sv.icon} {sv.title}
+            </label>
+          ))}
+        </div>
       </section>
 
       {isNew ? <TurningPlanEditor patientId="" /> : <TurningPlanEditor patientId={edit.id} />}

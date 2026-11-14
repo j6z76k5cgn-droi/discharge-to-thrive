@@ -24,23 +24,34 @@ export const Route = createFileRoute("/nurse/$patientId")({
   component: PatientPage,
 });
 
-function PainChart({ values }: { values: number[] }) {
-  const w = 320, h = 140, pad = 20;
-  const x = (i: number) => pad + (i * (w - pad * 2)) / Math.max(values.length - 1, 1);
-  const y = (v: number) => h - pad - (v / 10) * (h - pad * 2);
-  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+function RecoveryChart({ logs }: { logs: { pain: number; medsTaken: number; medsTotal: number; temp: number; symptoms: string[] }[] }) {
+  const w = 340, h = 170, pad = 22;
+  const x = (i: number) => pad + (i * (w - pad * 2)) / Math.max(logs.length - 1, 1);
+  const y = (pct: number) => h - pad - (pct / 100) * (h - pad * 2);
+  const series = [
+    { k: "pain", l: "الألم", cls: "stroke-destructive", v: logs.map((l) => l.pain * 10) },
+    { k: "adh", l: "الالتزام الدوائي", cls: "stroke-primary", v: logs.map((l) => Math.round((l.medsTaken / l.medsTotal) * 100)) },
+    { k: "temp", l: "الحرارة", cls: "stroke-warning", v: logs.map((l) => Math.max(0, Math.min(100, ((l.temp - 36) / 3) * 100))) },
+  ];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ direction: "ltr" }}>
-      {[0, 5, 10].map((g) => <line key={g} x1={pad} x2={w - pad} y1={y(g)} y2={y(g)} className="stroke-border" />)}
-      <path d={d} fill="none" strokeWidth={3} className="stroke-primary" />
-      {values.map((v, i) => (
-        <g key={i}>
-          <circle cx={x(i)} cy={y(v)} r={5} className={v >= 7 ? "fill-destructive" : "fill-primary"} />
-          <text x={x(i)} y={y(v) - 9} textAnchor="middle" fontSize={11} className="fill-foreground">{v}</text>
-          <text x={x(i)} y={h - 4} textAnchor="middle" fontSize={10} className="fill-muted-foreground">D{i + 1}</text>
-        </g>
-      ))}
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ direction: "ltr" }}>
+        {[0, 50, 100].map((g) => <line key={g} x1={pad} x2={w - pad} y1={y(g)} y2={y(g)} className="stroke-border" />)}
+        {series.map((s) => <path key={s.k} d={s.v.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ")} fill="none" strokeWidth={2.5} className={s.cls} />)}
+        {logs.map((l, i) => (
+          <g key={i}>
+            {l.symptoms.length > 0 && <circle cx={x(i)} cy={pad - 8} r={5} className="fill-destructive" />}
+            <text x={x(i)} y={h - 4} textAnchor="middle" fontSize={10} className="fill-muted-foreground">D{i + 1}</text>
+          </g>
+        ))}
+      </svg>
+      <div className="mt-2 flex flex-wrap gap-3 text-xs">
+        <span><span className="inline-block h-2 w-4 rounded bg-destructive" /> الألم (0–10)</span>
+        <span><span className="inline-block h-2 w-4 rounded bg-primary" /> الالتزام الدوائي %</span>
+        <span><span className="inline-block h-2 w-4 rounded bg-warning" /> الحرارة (36–39°م)</span>
+        <span>🔴 يوم ظهرت فيه أعراض</span>
+      </div>
+    </div>
   );
 }
 
@@ -90,8 +101,8 @@ function PatientPage() {
           <p className="mt-3 rounded-lg bg-secondary p-3 text-sm font-semibold text-secondary-foreground">التوصية: {a.recommendation}</p>
         </section>
         <section className="card-surface p-5">
-          <h2 className="mb-2 font-bold text-primary">📈 منحنى تطور الألم</h2>
-          <PainChart values={p.logs.map((l) => l.pain)} />
+          <h2 className="mb-2 font-bold text-primary">📈 منحنى تطور حالة المريض</h2>
+          <RecoveryChart logs={p.logs} />
         </section>
       </div>
 

@@ -8,6 +8,7 @@ import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult 
 import { classifySymptoms, tierMeta } from "@/lib/symptoms-engine";
 import { CaregiverTurning, SideEffectForm } from "@/components/CarePanels";
 import { shouldShowSideEffectForm } from "@/lib/care-inputs";
+import { CareNavigator } from "@/components/CareNavigator";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -31,9 +32,9 @@ const speak = (txt: string) => {
   const u = new SpeechSynthesisUtterance(txt); u.lang = "ar-SA"; window.speechSynthesis.speak(u);
 };
 const symIcons: Record<string, string> = { "حرارة": "🌡️", "غثيان": "🤢", "ضيق التنفس": "😮‍💨", "تورم الجرح": "🩹", "دوخة": "😵‍💫", "زرقة الشفاه/الأطراف": "💙", "ألم صدر حاد": "💔" };
-type Mode = "STANDARD" | "BIG_BUTTONS" | "VISUAL_SYMBOLS" | "CAREGIVER";
+type Mode = "BIG_BUTTONS" | "VISUAL_SYMBOLS" | "CAREGIVER" | "READ";
 const modes: { v: Mode; l: string }[] = [
-  { v: "STANDARD", l: "📝 عادي" }, { v: "BIG_BUTTONS", l: "👆 أزرار كبيرة" }, { v: "VISUAL_SYMBOLS", l: "🖼️ رموز بصرية" }, { v: "CAREGIVER", l: "👨‍👩‍👧 وضع المرافق" },
+  { v: "READ", l: "🔊 اقرأ لي" }, { v: "BIG_BUTTONS", l: "👆 أزرار كبيرة" }, { v: "VISUAL_SYMBOLS", l: "🖼️ رموز بصرية" }, { v: "CAREGIVER", l: "👨‍👩‍👧 وضع المرافق" },
 ];
 type Dose = { status: "TAKEN"; at: string } | { status: "MISSED"; reason: string; severe?: string };
 
@@ -102,18 +103,18 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const meds = patient.meds.map((m) => ({ id: m.id, rx: `${patient.id}-${m.id}`, n: m.name, d: m.route, times: m.times, win: m.windowMin, grace: m.missedAfterMin }));
   const [doses, setDoses] = useState<Record<string, Dose>>(h?.doses ?? {});
   const [now, setNow] = useState<number | null>(null);
-  const [mode, setMode] = useState<Mode>("STANDARD");
+  const [opts, setOpts] = useState<Record<Mode, boolean>>({ BIG_BUTTONS: false, VISUAL_SYMBOLS: false, CAREGIVER: false, READ: false });
   const [cgId, setCgId] = useState("CG-8821");
   const pk = (k: string) => `midad.opt.${k}.${patient.id}`;
-  const [gOn, setGOn] = useState(false);
-  const [bOn, setBOn] = useState(false);
-  const [readAloud, setReadAloud] = useState(false);
+  const gOn = !!patient.measures?.glucose;
+  const bOn = !!patient.measures?.bp;
+  const readAloud = opts.READ;
   useEffect(() => {
-    setGOn(localStorage.getItem(pk("g")) === "1"); setBOn(localStorage.getItem(pk("b")) === "1"); setReadAloud(localStorage.getItem(pk("read")) === "1");
+    const o = { BIG_BUTTONS: false, VISUAL_SYMBOLS: false, CAREGIVER: false, READ: false } as Record<Mode, boolean>;
+    (Object.keys(o) as Mode[]).forEach((k) => { o[k] = localStorage.getItem(pk(k)) === "1"; });
+    setOpts(o);
   }, [patient.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const toggle = (k: "g" | "b" | "read", v: boolean) => {
-    (k === "g" ? setGOn : k === "b" ? setBOn : setReadAloud)(v); localStorage.setItem(pk(k), v ? "1" : "0");
-  };
+  const toggle = (k: Mode, v: boolean) => { setOpts((o) => ({ ...o, [k]: v })); localStorage.setItem(pk(k), v ? "1" : "0"); };
   useEffect(() => { const f = () => { const d = new Date(); setNow(d.getHours() * 60 + d.getMinutes()); }; f(); const t = setInterval(f, 30000); return () => clearInterval(t); }, []);
   const [painBySite, setPainBySite] = useState<Record<string, number>>(h?.painBySite ?? {});
   const [sitesSel, setSitesSel] = useState<string[]>(h?.sitesSel ?? []);
@@ -136,7 +137,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   const [vRes, setVRes] = useState<VResult[]>([]);
   const saveVitals = () => {
     const out: VResult[] = [];
-    const by = mode === "CAREGIVER" ? `المرافق ${cgId}` : "المريض";
+    const by = opts.CAREGIVER ? `المرافق ${cgId}` : "المريض";
     const at = new Date().toISOString();
     const g = Number(gVal), s1 = Number(sys), d1 = Number(dia);
     if (gVal && g > 0) { const r = classifyGlucose(gCtx, g); out.push(r); patientStore.addVital(patient.id, { id: newId(), at, kind: "glucose", context: gCtx, glucose: g, level: r.level, label: r.label, by }); }
@@ -182,7 +183,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
     setSym((prev) => (prev.includes(name) ? prev : [...prev, name]));
     setSymDraft(""); setSymLoc(""); setSymSev("");
   };
-  const enteredBy = mode === "CAREGIVER" ? ` · بواسطة المرافق ${cgId}` : "";
+  const enteredBy = opts.CAREGIVER ? ` · بواسطة المرافق ${cgId}` : "";
   const due = meds.flatMap((m) => m.times.map((t) => ({ k: `${m.rx}-${t}`, t, grace: m.grace }))).filter((x) => now != null && toMin(x.t) <= now);
   const taken = due.filter((x) => doses[x.k]?.status === "TAKEN").length;
   const missedAuto = due.filter((x) => !doses[x.k] && now! - toMin(x.t) > x.grace);
@@ -206,34 +207,28 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
   return (
     <ReadCtx.Provider value={readAloud}>
     <fieldset disabled={readOnly} className="min-w-0">
-      <div className={mode === "BIG_BUTTONS" ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
+      <div className={opts.BIG_BUTTONS ? "text-lg [&_.btn]:min-h-16 [&_.btn]:min-w-16 [&_.btn]:text-lg" : ""}>
       <section className="card-surface mt-4 p-4">
-        <p className="mb-2 text-sm font-semibold">وضع التعافي المتكيف</p>
-        <div className="flex flex-wrap gap-2">
+        <p className="mb-2 text-sm font-semibold">خيارات التيسير (يمكن اختيار أكثر من خيار)</p>
+        <div className="grid gap-2 sm:grid-cols-2">
           {modes.map((m) => (
-            <button key={m.v} onClick={() => setMode(m.v)} className={`btn px-3 py-1.5 text-sm ${mode === m.v ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{m.l}</button>
+            <label key={m.v} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
+              <input type="checkbox" checked={opts[m.v]} onChange={(e) => toggle(m.v, e.target.checked)} className="h-5 w-5 accent-primary" />
+              {m.l}
+            </label>
           ))}
         </div>
-        {mode === "CAREGIVER" && (
+        {opts.CAREGIVER && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">
             رمز المرافق:
             <input value={cgId} onChange={(e) => setCgId(e.target.value)} className="w-28 rounded border bg-background p-1 text-foreground" />
             <span className="text-xs">كل إدخال يُسجَّل باسم المرافق (entered_by: CAREGIVER) لمراجعة التمريض.</span>
           </div>
         )}
-        {!readOnly && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {([["read", "🔊 اقرأ لي", readAloud], ["g", "🩸 قياس السكر", gOn], ["b", "💓 قياس الضغط", bOn]] as const).map(([k, l, v]) => (
-              <label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-3 text-sm font-semibold">
-                <input type="checkbox" checked={v} onChange={(e) => toggle(k, e.target.checked)} className="h-5 w-5 accent-primary" />
-                {l}
-              </label>
-            ))}
-          </div>
-        )}
       </section>
 
 
+      <CareNavigator patient={patient} readOnly={readOnly} />
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <CaregiverTurning patient={patient} readOnly={readOnly} />
       </div>
@@ -302,6 +297,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
 
         {(gOn || bOn || readOnly) && <section className="card-surface p-5 md:col-span-2">
           <h2 className="mb-3 font-bold text-primary">🩸 قياساتي<Say t="قياساتي. أدخل القراءة ثم اضغط حفظ وإرسال." /></h2>
+          {patient.measures?.note && <p className="mb-3 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">تعليمات الممرض: {patient.measures.note}</p>}
           <div className={`grid gap-4 ${(gOn || readOnly) && (bOn || readOnly) ? "md:grid-cols-2" : ""}`}>
             {(gOn || readOnly) && <div className="rounded-xl border bg-background p-4">
               <p className="mb-2 font-semibold">سكر الدم (mg/dL)<Say t="سكر الدم. اختر حالتك: صائم، أو بعد الأكل بساعتين، أو قبل النوم، أو عشوائي، ثم اكتب الرقم الظاهر في جهاز السكر." /></p>
@@ -381,7 +377,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
                 <span key={s} className="inline-flex items-center">
                   <button onClick={() => setSym(on ? sym.filter((x) => x !== s) : [...sym, s])}
                     className={`btn px-3 py-1.5 text-sm ${on ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}>
-                    {mode === "VISUAL_SYMBOLS" && <span className="ml-1 text-2xl">{symIcons[s] ?? "❓"}</span>}
+                    {opts.VISUAL_SYMBOLS && <span className="ml-1 text-2xl">{symIcons[s] ?? "❓"}</span>}
                     {s}
                     {extra && (extra.loc || extra.sev) && (
                       <span className="mr-1 text-xs opacity-80">

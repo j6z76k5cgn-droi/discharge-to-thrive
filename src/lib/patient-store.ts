@@ -32,6 +32,7 @@ export interface ManagedPatient {
   sideEffects?: SideEffectReport[];
   seRedFlags?: string[]; // علامات خطر إضافية يحددها الممرض
   measures?: { glucose?: boolean; bp?: boolean; note?: string }; // قياسات يحددها الممرض
+  inquiries?: { id: string; at: string; q: string; matched: string[] }[]; // أسئلة الأسرة للمرشد
   services?: string[]; // خدمات بعد الخروج يحددها الممرض (للمرشد)
 }
 import type { TurningPlan, TurnDone, SideEffectReport } from "./care-engine";

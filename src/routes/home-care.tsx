@@ -8,6 +8,7 @@ import { classifyBP, classifyGlucose, glucoseContexts, vLevelMeta, type VResult 
 import { classifySymptoms, tierMeta } from "@/lib/symptoms-engine";
 import { CaregiverTurning, SideEffectForm } from "@/components/CarePanels";
 import { shouldShowSideEffectForm } from "@/lib/care-inputs";
+import { CareNavigator } from "@/components/CareNavigator";
 
 export const Route = createFileRoute("/home-care")({
   head: () => ({
@@ -227,6 +228,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
       </section>
 
 
+      <CareNavigator patient={patient} readOnly={readOnly} />
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <CaregiverTurning patient={patient} readOnly={readOnly} />
       </div>
@@ -295,6 +297,7 @@ function Body({ patient, readOnly }: { patient: ManagedPatient; readOnly: boolea
 
         {(gOn || bOn || readOnly) && <section className="card-surface p-5 md:col-span-2">
           <h2 className="mb-3 font-bold text-primary">🩸 قياساتي<Say t="قياساتي. أدخل القراءة ثم اضغط حفظ وإرسال." /></h2>
+          {patient.measures?.note && <p className="mb-3 rounded-lg bg-secondary p-2 text-sm text-secondary-foreground">تعليمات الممرض: {patient.measures.note}</p>}
           <div className={`grid gap-4 ${(gOn || readOnly) && (bOn || readOnly) ? "md:grid-cols-2" : ""}`}>
             {(gOn || readOnly) && <div className="rounded-xl border bg-background p-4">
               <p className="mb-2 font-semibold">سكر الدم (mg/dL)<Say t="سكر الدم. اختر حالتك: صائم، أو بعد الأكل بساعتين، أو قبل النوم، أو عشوائي، ثم اكتب الرقم الظاهر في جهاز السكر." /></p>

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { Shell } from "@/components/Shell";
 import { NurseAlerts } from "@/components/NurseAlerts";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
@@ -18,20 +19,21 @@ export const Route = createFileRoute("/nurse/")({
 function Nurse() {
   const rows = patients.map((p) => ({ p, a: analyze(p) }))
     .sort((x, y) => ["urgent", "follow", "stable"].indexOf(x.a.status) - ["urgent", "follow", "stable"].indexOf(y.a.status));
+  const [open, setOpen] = useState<"urgent" | "follow" | null>(null);
   return (
     <Shell>
       <h1 className="font-display text-3xl text-ink">مرضاي بعد الخروج</h1>
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           { l: "إجمالي المرضى", v: rows.length, c: "text-ink" },
-          { l: "حالات عاجلة", v: rows.filter((r) => r.a.status === "urgent").length, c: "text-destructive" },
-          { l: "تحتاج متابعة", v: rows.filter((r) => r.a.status === "follow").length, c: "text-warning-foreground" },
+          { l: "حالات عاجلة", v: rows.filter((r) => r.a.status === "urgent").length, c: "text-destructive", k: "urgent" as const },
+          { l: "تحتاج متابعة", v: rows.filter((r) => r.a.status === "follow").length, c: "text-warning-foreground", k: "follow" as const },
           { l: "متوسط الالتزام الدوائي", v: `${rows.length ? Math.round(rows.reduce((t, r) => t + r.a.adherence, 0) / rows.length) : 0}%`, c: "text-primary" },
         ].map((k) => (
-          <div key={k.l} className="card-surface p-4">
-            <p className="text-xs text-muted-foreground">{k.l}</p>
+          <button type="button" key={k.l} disabled={!("k" in k)} onClick={() => "k" in k && setOpen(k.k!)} className={`card-surface p-4 text-start ${"k" in k ? "cursor-pointer hover:ring-2 hover:ring-primary" : ""}`}>
+            <p className="text-xs text-muted-foreground">{k.l}{"k" in k && " ↩︎ اضغط للتفاصيل"}</p>
             <p className={`font-display mt-1 text-3xl ${k.c}`}>{k.v}</p>
-          </div>
+          </button>
         ))}
       </div>
       <div className="card-surface mt-3 p-4">
@@ -46,6 +48,27 @@ function Nurse() {
           ))}
         </div>
       </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4" onClick={() => setOpen(null)}>
+          <div className="card-surface max-h-[85vh] w-full max-w-lg overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className={`font-bold ${open === "urgent" ? "text-destructive" : "text-warning-foreground"}`}>{open === "urgent" ? "🚨 الحالات العاجلة وأسبابها" : "⚠️ الحالات التي تحتاج متابعة"}</h3>
+              <button type="button" onClick={() => setOpen(null)} className="btn bg-muted px-3 py-1 text-sm">✕</button>
+            </div>
+            {rows.filter((r) => r.a.status === open).length === 0 && <p className="text-sm text-muted-foreground">لا توجد حالات.</p>}
+            {rows.filter((r) => r.a.status === open).map(({ p, a }) => (
+              <div key={p.id} className="mb-3 rounded-xl border bg-background p-4 text-sm">
+                <p className="font-bold">{p.name} <span className="text-xs text-muted-foreground">· درجة الخطورة {a.risk.score}/100</span></p>
+                <p className="mt-2 text-xs font-semibold text-muted-foreground">السبب:</p>
+                <ul className="mt-1 space-y-1">{a.alerts.map((x) => <li key={x.text} className={`rounded-lg px-2 py-1 ${statusMeta[x.level].cls}`}>{x.text}</li>)}</ul>
+                <p className="mt-2 text-xs">التوصية: {a.recommendation}</p>
+                <Link to="/nurse/$patientId" params={{ patientId: p.id }} className="btn mt-3 inline-block bg-primary px-3 py-1 text-xs text-primary-foreground">فتح ملف المريض</Link>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">القرار السريري للفريق الصحي.</p>
+          </div>
+        </div>
+      )}
       <NurseAlerts />
       <section className="card-surface mt-6 p-5">
         <h2 className="mb-3 font-bold text-destructive">🚨 تنبيهات الالتزام الدوائي</h2>

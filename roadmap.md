@@ -8,3 +8,9 @@
 - [ ] Phase 3: nurse editing/approval of turning plan + compliance & side-effect review on nurse dashboard
 - [ ] Phase 4: full scenario testing (Fahad, Saleh, Noura)
 - [ ] Later: per-condition follow-up packages, central nursing tasks, Cloud sync
+- [x] Measurements (glucose/BP) chosen by nurse in patient file
+- [x] Accessibility options as multi-select checkboxes
+- [x] Urgent/follow cards open a popup with reasons
+- [x] Overall recovery chart (pain, adherence, temperature, symptoms)
+- [x] Post-discharge services guide (directory-based, logs inquiries)
+- [ ] Full English translation of all pages + mock data (in progress)

@@ -16,7 +16,7 @@ export function CareNavigator({ patient, readOnly }: { patient: ManagedPatient; 
     setAsked(text); setQ(text);
     if (readOnly) return;
     const m = matchServices(text);
-    patientStore.update(patient.id, (p) => ({ ...p, inquiries: [...(p.inquiries ?? []), { id: newId(), at: new Date().toISOString(), q: text, matched: m.map((s) => s.id) }] }));
+    patientStore.patch(patient.id, (p) => ({ ...p, inquiries: [...(p.inquiries ?? []), { id: newId(), at: new Date().toISOString(), q: text, matched: m.map((s) => s.id) }] }));
   };
   return (
     <section className="card-surface mt-6 p-5">

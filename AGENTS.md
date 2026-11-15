@@ -11,3 +11,5 @@
 - Patient records (details, medication plans, discharge answers) live in a single browser-saved store shared by all pages, so every screen reads the same patient list.
 - Clinical rules (turning plans, side-effect tiers) live in src/lib/care-engine.ts as pure functions with tests; content is per-patient and gated by nurse approval — keeps rules reviewable.
 - Care input rules live in a tested browser-safe helper; side-effect forms receive the triggering medication ID and forbidden-position text preserves whitespace in the existing array format to retain saved-plan compatibility.
+
+- Sign-in is demo-only: credentials live in src/lib/demo-login.ts (tested); swap for real auth later without changing callers.

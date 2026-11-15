@@ -2,6 +2,8 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { setRole, useRole } from "@/lib/role-store";
 import { setLang, useLang } from "@/lib/lang-store";
+import { setBigFont, useBigFont } from "@/lib/font-scale";
+import { WelcomeGate as RolePicker } from "@/components/WelcomeGate";
 
 const nurseNav = [
   { to: "/patients", label: "المرضى", en: "Patients" },
@@ -20,6 +22,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = role === "patient" ? patientNav : nurseNav;
   const lang = useLang();
   const en = lang === "en";
+  const big = useBigFont();
+  useEffect(() => { document.documentElement.style.fontSize = big ? "118%" : ""; }, [big]);
   useEffect(() => { document.documentElement.lang = lang; document.documentElement.dir = en ? "ltr" : "rtl"; }, [lang, en]);
 
   return (
@@ -29,7 +33,8 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link to={role === "patient" ? "/home-care" : "/"} className="font-display text-2xl text-ink">
             مِداد <span className="text-sm text-muted-foreground">| MIDAD</span>
           </Link>
-          <button onClick={() => setLang(en ? "ar" : "en")} className="rounded-full border border-input px-3 py-1 text-xs font-semibold text-primary transition hover:bg-secondary" aria-label="Language">{en ? "العربية" : "English"}</button>
+          <div className="flex items-center gap-2"><button onClick={() => setBigFont(!big)} aria-pressed={big} className="rounded-full border border-input px-3 py-1 text-xs font-semibold text-primary transition hover:bg-secondary">{big ? (en ? "A− Normal text" : "ع− حجم عادي") : (en ? "A+ Larger text" : "ع+ تكبير الخط")}</button>
+          <button onClick={() => setLang(en ? "ar" : "en")} className="rounded-full border border-input px-3 py-1 text-xs font-semibold text-primary transition hover:bg-secondary" aria-label="Language">{en ? "العربية" : "English"}</button></div>
           {role && (
             <nav className="flex flex-wrap items-center gap-1 text-sm">
               {nav.map((n) => (
@@ -56,18 +61,3 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function RolePicker() {
-  const navigate = useNavigate();
-  const en = useLang() === "en";
-  const pick = (r: "patient" | "nurse") => { setRole(r); if (r === "patient") navigate({ to: "/home-care" }); };
-  return (
-    <div className="mx-auto max-w-xl py-10 text-center">
-      <h1 className="font-display text-3xl text-ink">{en ? "Welcome to MIDAD" : "مرحبًا بك في مِداد"}</h1>
-      <p className="mt-2 text-muted-foreground">{en ? "Choose how to sign in" : "اختر طريقة الدخول"}</p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button onClick={() => pick("patient")} className="card-surface p-6 text-lg font-bold transition hover:-translate-y-1">{en ? "🧑 I am a patient" : "🧑 أنا مريض"}</button>
-        <button onClick={() => pick("nurse")} className="card-surface p-6 text-lg font-bold transition hover:-translate-y-1">{en ? "🩺 I am a nurse / clinician" : "🩺 أنا ممرض / كادر صحي"}</button>
-      </div>
-    </div>
-  );
-}

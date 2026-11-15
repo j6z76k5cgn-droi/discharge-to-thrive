@@ -45,6 +45,7 @@ function HomeCare() {
   const list = usePatients();
   const role = useRole();
   const [pid, setPid] = useState("");
+  useEffect(() => { const v = localStorage.getItem("midad.patientId"); if (v) setPid(v); }, []);
   const patient = list.find((x) => x.id === pid) ?? list[0];
   const readOnly = role === "nurse";
   return (

@@ -14,3 +14,6 @@
 - [x] Overall recovery chart (pain, adherence, temperature, symptoms)
 - [x] Post-discharge services guide (directory-based, logs inquiries)
 - [ ] Full English translation of all pages + mock data (in progress)
+
+- [x] Welcome screen + demo patient/staff portals + larger-text toggle
+- [ ] Clarify user message «التعديلات ذي زياده ابي…» (cut off)

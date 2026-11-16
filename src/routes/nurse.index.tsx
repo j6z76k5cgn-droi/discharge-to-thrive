@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "@/components/Shell";
 import { NurseAlerts } from "@/components/NurseAlerts";
+import { patientStore, usePatients } from "@/lib/patient-store";
 import { analyze, patients, statusMeta } from "@/lib/midad-data";
 
 export const Route = createFileRoute("/nurse/")({
@@ -103,6 +104,28 @@ function Nurse() {
           </Link>
         ))}
       </div>
+      <OnCallQuestions />
     </Shell>
+  );
+}
+
+
+function OnCallQuestions() {
+  const list = usePatients();
+  const qs = list.flatMap((p) => (p.inquiries ?? []).filter((q) => q.escalated && !q.answered).map((q) => ({ p, q })));
+  return (
+    <section className="card-surface mt-8 p-5">
+      <h2 className="mb-2 font-bold text-primary">📨 أسئلة محوّلة للممرض المناوب ({qs.length})</h2>
+      {qs.length === 0 ? <p className="text-sm text-muted-foreground">لا توجد أسئلة بانتظار الرد.</p> : (
+        <ul className="space-y-2">{qs.map(({ p, q }) => (
+          <li key={q.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background p-3 text-sm">
+            <span><b>{p.name}</b> · {new Date(q.at).toLocaleString("ar-SA")}<br />{q.q}</span>
+            <span className="flex gap-2">
+              {p.phone && <a href={`tel:${p.phone}`} className="btn bg-primary px-3 py-1 text-xs text-primary-foreground">📞 اتصال</a>}
+              <button type="button" onClick={() => patientStore.patch(p.id, (x) => ({ ...x, inquiries: (x.inquiries ?? []).map((y) => (y.id === q.id ? { ...y, answered: true } : y)) }))} className="btn bg-muted px-3 py-1 text-xs">✓ تم الرد</button>
+            </span>
+          </li>))}
+        </ul>)}
+    </section>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { newId, patientStore, type ManagedPatient } from "@/lib/patient-store";
 import { matchServices, SERVICES } from "@/lib/services-guide";
 import { useLang } from "@/lib/lang-store";
+import { replyFor } from "@/lib/assistant-faq";
 
 const QUICK = ["والدي خرج ويحتاج علاج طبيعي، أين نتوجه؟", "كيف أحصل على خدمة الرعاية المنزلية؟", "ما الجهة المناسبة لتقييم حالة المريض؟", "نحتاج تأهيل بعد الجلطة، ما الخطوة التالية؟"];
 const QUICK_EN = ["My father needs physiotherapy after discharge, where do we go?", "How do I get home care?", "Who can assess the patient's condition?", "We need rehab after a stroke, what's next?"];
@@ -12,15 +13,18 @@ export function CareNavigator({ patient, readOnly }: { patient: ManagedPatient; 
   const [asked, setAsked] = useState<string | null>(null);
   const suggested = SERVICES.filter((s) => patient.services?.includes(s.id));
   const res = asked != null ? matchServices(asked) : [];
+  const reply = asked != null ? replyFor(asked) : null;
   const ask = (text: string) => {
     setAsked(text); setQ(text);
     if (readOnly) return;
+    if (!text.trim()) return;
     const m = matchServices(text);
-    patientStore.patch(patient.id, (p) => ({ ...p, inquiries: [...(p.inquiries ?? []), { id: newId(), at: new Date().toISOString(), q: text, matched: m.map((s) => s.id) }] }));
+    const escalated = m.length === 0 && replyFor(text).kind !== "faq";
+    patientStore.patch(patient.id, (p) => ({ ...p, inquiries: [...(p.inquiries ?? []), { id: newId(), at: new Date().toISOString(), q: text, matched: m.map((s) => s.id), escalated }] }));
   };
   return (
     <section className="card-surface mt-6 p-5">
-      <h2 className="mb-1 font-bold text-primary">🧭 {en ? "Post-discharge services guide" : "مرشد خدمات ما بعد الخروج"}</h2>
+      <h2 className="mb-1 font-bold text-primary">🧭 {en ? "MIDAD assistant & services guide" : "مساعد مِداد ومرشد الخدمات"}</h2>
       <p className="mb-3 text-xs text-muted-foreground">{en ? "Guidance from a services directory only — no diagnosis. Demo data, to be verified by the health team." : "توجيه من دليل خدمات فقط — بدون تشخيص. بيانات استرشادية تجريبية تحتاج اعتماد الجهة الصحية."}</p>
       {suggested.length > 0 && (
         <div className="mb-3 rounded-lg bg-secondary p-3 text-sm text-secondary-foreground">
@@ -33,8 +37,15 @@ export function CareNavigator({ patient, readOnly }: { patient: ManagedPatient; 
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={en ? "Type your question…" : "اكتب سؤالك…"} className="flex-1 rounded-lg border bg-background p-2 text-sm" />
         <button type="button" onClick={() => ask(q)} className="btn bg-primary px-4 text-sm text-primary-foreground">{en ? "Ask" : "اسأل"}</button>
       </div>
+      {asked != null && reply?.kind === "emergency" && (
+        <div className="mt-3 rounded-lg bg-destructive p-3 text-sm text-destructive-foreground" role="alert">
+          <p className="font-bold">{en ? "This may be an emergency — call 997 now." : "قد تكون حالة طارئة — اتصل بالإسعاف 997 الآن."}</p>
+          <a href="tel:997" className="btn mt-2 inline-block bg-card px-4 py-1 text-destructive">📞 997</a>
+        </div>)}
+      {asked != null && res.length === 0 && reply?.kind === "faq" && (
+        <p className="mt-3 rounded-lg bg-secondary p-3 text-sm text-secondary-foreground">🤖 {en ? reply.faq.answerEn : reply.faq.answer}</p>)}
       {asked != null && (res.length === 0
-        ? <p className="mt-3 rounded-lg bg-warning p-3 text-sm text-warning-foreground">{en ? "No matching service in the directory. Please contact your nurse or call 937." : "لا توجد خدمة مطابقة في الدليل. تواصل مع الممرض المتابع أو اتصل 937."}</p>
+        ? (reply?.kind !== "faq" && <p className="mt-3 rounded-lg bg-warning p-3 text-sm text-warning-foreground">📨 {en ? "Your question has been sent to the on-call nurse." : "تم إرسال السؤال إلى الممرض المناوب."}</p>)
         : <div className="mt-3 grid gap-3 md:grid-cols-2">{res.map((s) => (
             <div key={s.id} className="rounded-xl border bg-background p-4 text-sm">
               <p className="font-bold">{s.icon} {en ? s.titleEn : s.title}</p>

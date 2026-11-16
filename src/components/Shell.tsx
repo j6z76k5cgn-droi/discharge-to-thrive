@@ -4,6 +4,7 @@ import { setRole, useRole } from "@/lib/role-store";
 import { setLang, useLang } from "@/lib/lang-store";
 import { setBigFont, useBigFont } from "@/lib/font-scale";
 import { WelcomeGate as RolePicker } from "@/components/WelcomeGate";
+import { startTranslation } from "@/lib/i18n";
 
 const nurseNav = [
   { to: "/patients", label: "المرضى", en: "Patients" },
@@ -17,14 +18,14 @@ export function Shell({ children }: { children: ReactNode }) {
   const role = useRole();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const blocked = role === "patient" && path !== "/home-care";
+  const blocked = role === "patient" && !path.startsWith("/home-care");
   useEffect(() => { if (blocked) navigate({ to: "/home-care", replace: true }); }, [blocked, navigate]);
   const nav = role === "patient" ? patientNav : nurseNav;
   const lang = useLang();
   const en = lang === "en";
   const big = useBigFont();
   useEffect(() => { document.documentElement.style.fontSize = big ? "118%" : ""; }, [big]);
-  useEffect(() => { document.documentElement.lang = lang; document.documentElement.dir = en ? "ltr" : "rtl"; }, [lang, en]);
+  useEffect(() => { document.documentElement.lang = lang; document.documentElement.dir = en ? "ltr" : "rtl"; startTranslation(en); }, [lang, en]);
 
   return (
     <div dir={en ? "ltr" : "rtl"} lang={lang} className={`min-h-screen ${en ? "font-sans-en" : ""}`}>

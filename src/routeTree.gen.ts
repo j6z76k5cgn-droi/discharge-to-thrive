@@ -13,6 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DischargeRouteImport } from './routes/discharge'
 import { Route as HomeCareRouteImport } from './routes/home-care'
 import { Route as PatientsRouteImport } from './routes/patients'
+import { Route as HomeCareIndexRouteImport } from './routes/home-care.index'
+import { Route as HomeCareHealthRouteImport } from './routes/home-care.health'
+import { Route as HomeCareHelpRouteImport } from './routes/home-care.help'
 import { Route as NurseIndexRouteImport } from './routes/nurse.index'
 import { Route as NursePatientIdRouteImport } from './routes/nurse.$patientId'
 
@@ -36,6 +39,21 @@ const PatientsRoute = PatientsRouteImport.update({
   path: '/patients',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HomeCareIndexRoute = HomeCareIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => HomeCareRoute,
+} as any)
+const HomeCareHealthRoute = HomeCareHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => HomeCareRoute,
+} as any)
+const HomeCareHelpRoute = HomeCareHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => HomeCareRoute,
+} as any)
 const NurseIndexRoute = NurseIndexRouteImport.update({
   id: '/nurse/',
   path: '/nurse/',
@@ -50,26 +68,34 @@ const NursePatientIdRoute = NursePatientIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/discharge': typeof DischargeRoute
-  '/home-care': typeof HomeCareRoute
+  '/home-care': typeof HomeCareRouteWithChildren
   '/patients': typeof PatientsRoute
+  '/home-care/health': typeof HomeCareHealthRoute
+  '/home-care/help': typeof HomeCareHelpRoute
   '/nurse/$patientId': typeof NursePatientIdRoute
+  '/home-care/': typeof HomeCareIndexRoute
   '/nurse/': typeof NurseIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/discharge': typeof DischargeRoute
-  '/home-care': typeof HomeCareRoute
   '/patients': typeof PatientsRoute
+  '/home-care/health': typeof HomeCareHealthRoute
+  '/home-care/help': typeof HomeCareHelpRoute
   '/nurse/$patientId': typeof NursePatientIdRoute
+  '/home-care': typeof HomeCareIndexRoute
   '/nurse': typeof NurseIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/discharge': typeof DischargeRoute
-  '/home-care': typeof HomeCareRoute
+  '/home-care': typeof HomeCareRouteWithChildren
   '/patients': typeof PatientsRoute
+  '/home-care/health': typeof HomeCareHealthRoute
+  '/home-care/help': typeof HomeCareHelpRoute
   '/nurse/$patientId': typeof NursePatientIdRoute
+  '/home-care/': typeof HomeCareIndexRoute
   '/nurse/': typeof NurseIndexRoute
 }
 export interface FileRouteTypes {
@@ -79,15 +105,20 @@ export interface FileRouteTypes {
     | '/discharge'
     | '/home-care'
     | '/patients'
+    | '/home-care/health'
+    | '/home-care/help'
     | '/nurse/$patientId'
+    | '/home-care/'
     | '/nurse/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/discharge'
-    | '/home-care'
     | '/patients'
+    | '/home-care/health'
+    | '/home-care/help'
     | '/nurse/$patientId'
+    | '/home-care'
     | '/nurse'
   id:
     | '__root__'
@@ -95,14 +126,17 @@ export interface FileRouteTypes {
     | '/discharge'
     | '/home-care'
     | '/patients'
+    | '/home-care/health'
+    | '/home-care/help'
     | '/nurse/$patientId'
+    | '/home-care/'
     | '/nurse/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DischargeRoute: typeof DischargeRoute
-  HomeCareRoute: typeof HomeCareRoute
+  HomeCareRoute: typeof HomeCareRouteWithChildren
   PatientsRoute: typeof PatientsRoute
   NursePatientIdRoute: typeof NursePatientIdRoute
   NurseIndexRoute: typeof NurseIndexRoute
@@ -138,6 +172,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PatientsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/home-care/': {
+      id: '/home-care/'
+      path: '/'
+      fullPath: '/home-care/'
+      preLoaderRoute: typeof HomeCareIndexRouteImport
+      parentRoute: typeof HomeCareRoute
+    }
+    '/home-care/health': {
+      id: '/home-care/health'
+      path: '/health'
+      fullPath: '/home-care/health'
+      preLoaderRoute: typeof HomeCareHealthRouteImport
+      parentRoute: typeof HomeCareRoute
+    }
+    '/home-care/help': {
+      id: '/home-care/help'
+      path: '/help'
+      fullPath: '/home-care/help'
+      preLoaderRoute: typeof HomeCareHelpRouteImport
+      parentRoute: typeof HomeCareRoute
+    }
     '/nurse/': {
       id: '/nurse/'
       path: '/nurse'
@@ -155,10 +210,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface HomeCareRouteChildren {
+  HomeCareHealthRoute: typeof HomeCareHealthRoute
+  HomeCareHelpRoute: typeof HomeCareHelpRoute
+  HomeCareIndexRoute: typeof HomeCareIndexRoute
+}
+
+const HomeCareRouteChildren: HomeCareRouteChildren = {
+  HomeCareHealthRoute: HomeCareHealthRoute,
+  HomeCareHelpRoute: HomeCareHelpRoute,
+  HomeCareIndexRoute: HomeCareIndexRoute,
+}
+
+const HomeCareRouteWithChildren = HomeCareRoute._addFileChildren(
+  HomeCareRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DischargeRoute: DischargeRoute,
-  HomeCareRoute: HomeCareRoute,
+  HomeCareRoute: HomeCareRouteWithChildren,
   PatientsRoute: PatientsRoute,
   NursePatientIdRoute: NursePatientIdRoute,
   NurseIndexRoute: NurseIndexRoute,
